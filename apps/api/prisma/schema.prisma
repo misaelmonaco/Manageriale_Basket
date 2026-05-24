@@ -1,0 +1,281 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  DIRECTOR
+  COACH
+  PLAYER
+  PARENT
+}
+
+enum MatchStatus {
+  SCHEDULED
+  PLAYED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  DUE
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum NotificationType {
+  INFO
+  PAYMENT
+  TRAINING
+  MATCH
+  DOCUMENT
+}
+
+enum DocumentAudience {
+  DIRECTORS
+  COACHES
+  PLAYERS
+  COACHES_PLAYERS
+  ALL
+}
+
+enum ProfileAssignmentStatus {
+  ASSIGNED
+  UNASSIGNED
+}
+
+model Organization {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String
+  slug          String         @unique
+  fiscalCode    String?
+  email         String?
+  phone         String?
+  settings      Json           @default("{}")
+  subscription  String         @default("FREE")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  users         User[]
+  teams         Team[]
+  players       Player[]
+  coaches       Coach[]
+  trainings     Training[]
+  matches       Match[]
+  payments      Payment[]
+  expenses      Expense[]
+  documents     Document[]
+  notifications Notification[]
+}
+
+model User {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String?        @db.Uuid
+  username       String?        @unique
+  email          String         @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  birthDate      DateTime?
+  role           Role
+  isActive       Boolean        @default(true)
+  refreshTokens  RefreshToken[]
+  player         Player?
+  coach          Coach?
+  parentLinks    PlayerParent[]
+  uploadedDocuments Document[]    @relation("UploadedDocuments")
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([organizationId, role])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String
+  revokedAt DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, revokedAt, expiresAt])
+}
+
+model Team {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  category       String
+  season         String
+  players        Player[]
+  coaches        CoachTeam[]
+  trainings      Training[]
+  homeMatches    Match[]      @relation("HomeTeam")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, name, season])
+  @@index([organizationId])
+}
+
+model Player {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String?        @db.Uuid
+  userId           String?        @unique @db.Uuid
+  teamId           String?        @db.Uuid
+  assignmentStatus ProfileAssignmentStatus @default(ASSIGNED)
+  birthDate        DateTime
+  jerseyNumber     Int?
+  medicalExpiresAt DateTime?
+  user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  team             Team?          @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  parents          PlayerParent[]
+  payments         Payment[]
+  organization     Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([assignmentStatus])
+  @@index([organizationId, teamId])
+}
+
+model PlayerParent {
+  playerId String @db.Uuid
+  parentId String @db.Uuid
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  parent   User   @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@id([playerId, parentId])
+}
+
+model Coach {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String?      @db.Uuid
+  userId         String       @unique @db.Uuid
+  licenseNumber  String?
+  assignmentStatus ProfileAssignmentStatus @default(ASSIGNED)
+  teams          CoachTeam[]
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([assignmentStatus])
+  @@index([organizationId])
+}
+
+model CoachTeam {
+  coachId String @db.Uuid
+  teamId  String @db.Uuid
+  coach   Coach  @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  team    Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([coachId, teamId])
+}
+
+model Training {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  teamId         String       @db.Uuid
+  title          String
+  startsAt       DateTime
+  endsAt         DateTime
+  location       String
+  notes          String?
+  team           Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, startsAt])
+}
+
+model Match {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  homeTeamId     String       @db.Uuid
+  opponentName   String
+  startsAt       DateTime
+  location       String
+  status         MatchStatus  @default(SCHEDULED)
+  homeScore      Int?
+  awayScore      Int?
+  homeTeam       Team         @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, startsAt])
+}
+
+model Payment {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  playerId       String        @db.Uuid
+  description    String
+  amountCents    Int
+  dueDate        DateTime
+  paidAt         DateTime?
+  status         PaymentStatus @default(DUE)
+  player         Player        @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([organizationId, status])
+}
+
+model Expense {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  category       String
+  vendor         String
+  amountCents    Int
+  spentAt        DateTime
+  notes          String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, spentAt])
+}
+
+model Notification {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  userId         String?          @db.Uuid
+  type           NotificationType
+  title          String
+  body           String
+  readAt         DateTime?
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+
+  @@index([organizationId, userId])
+}
+
+model Document {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  mimeType       String
+  storageKey     String
+  audience       DocumentAudience @default(DIRECTORS)
+  uploadedById   String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy     User         @relation("UploadedDocuments", fields: [uploadedById], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([organizationId, audience])
+  @@index([uploadedById])
+}

@@ -1,0 +1,20 @@
+{
+  "name": "manageriale-basket",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.12.3",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\"",
+    "db:migrate": "pnpm --filter @basket/api prisma:migrate",
+    "db:generate": "pnpm --filter @basket/api prisma:generate"
+  },
+  "devDependencies": {
+    "@basket/tsconfig": "workspace:*",
+    "prettier": "^3.3.3",
+    "turbo": "^2.2.3",
+    "typescript": "^5.6.3"
+  }
+}
