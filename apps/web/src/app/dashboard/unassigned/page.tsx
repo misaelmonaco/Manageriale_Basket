@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { apiFetch, clientAuth, type ApiPage } from "@/lib/api";
 
-type ProfileType = "PLAYER" | "COACH";
+type ProfileType = "PLAYER" | "COACH" | "DIRECTOR";
 type Organization = { id: string; name: string; slug: string };
 type Team = { id: string; name: string; season: string; organizationId: string };
 type Svincolato = {
@@ -18,11 +18,20 @@ type Svincolato = {
   organization?: Organization | null;
   team?: Team | null;
   teams?: { team: Team }[];
+  directorTeams?: { team: Team }[];
 };
 
 type UnassignedResponse = {
   players: Omit<Svincolato, "type">[];
   coaches: Omit<Svincolato, "type">[];
+  directors: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    organization?: Organization | null;
+    directorTeams?: { team: Team }[];
+  }[];
 };
 
 type RowState = { organizationId?: string; organizationSlug?: string; teamId?: string };
@@ -49,7 +58,9 @@ export default function UnassignedPage() {
         teamLabel:
           profile.type === "PLAYER"
             ? profile.team?.name ?? ""
-            : profile.teams?.map((item) => item.team.name).join(", ") ?? "",
+            : profile.type === "COACH"
+              ? profile.teams?.map((item) => item.team.name).join(", ") ?? ""
+              : profile.directorTeams?.map((item) => item.team.name).join(", ") ?? "",
       })),
     [profiles],
   );
@@ -62,6 +73,18 @@ export default function UnassignedPage() {
       setProfiles([
         ...response.players.map((player) => ({ ...player, type: "PLAYER" as const })),
         ...response.coaches.map((coach) => ({ ...coach, type: "COACH" as const })),
+        ...(response.directors ?? []).map((director) => ({
+          id: director.id,
+          type: "DIRECTOR" as const,
+          assignmentStatus: "UNASSIGNED" as const,
+          user: {
+            firstName: director.firstName,
+            lastName: director.lastName,
+            email: director.email,
+          },
+          organization: director.organization,
+          directorTeams: director.directorTeams,
+        })),
       ]);
 
       if (isSuperAdmin) {

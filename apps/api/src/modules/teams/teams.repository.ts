@@ -10,7 +10,7 @@ export class TeamsRepository {
   findMany(organizationId: string, query: PageQueryDto) {
     return this.prisma.team.findMany({
       where: { organizationId },
-      include: { _count: { select: { players: true, coaches: true } } },
+      include: { _count: { select: { players: true, coaches: true, directors: true } } },
       orderBy: { name: "asc" },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize
@@ -34,7 +34,8 @@ export class TeamsRepository {
           orderBy: { user: { lastName: "asc" } },
         },
         coaches: { include: { coach: { include: { user: { select: { firstName: true, lastName: true, email: true } } } } } },
-        _count: { select: { players: true, coaches: true, trainings: true, homeMatches: true } },
+        directors: { include: { director: { select: { firstName: true, lastName: true, email: true } } } },
+        _count: { select: { players: true, coaches: true, directors: true, trainings: true, homeMatches: true } },
       },
     });
   }

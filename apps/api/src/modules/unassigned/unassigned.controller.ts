@@ -16,7 +16,7 @@ export class UnassignedController {
   constructor(private readonly service: UnassignedService) {}
 
   @Get()
-  @ApiOperation({ summary: "List all svincolati player and coach profiles visible to the current user" })
+  @ApiOperation({ summary: "List all svincolati player, coach, and director profiles visible to the current user" })
   findAll(@CurrentUser() user: RequestUser) {
     return this.service.findAll(user);
   }
@@ -31,6 +31,12 @@ export class UnassignedController {
   @ApiOperation({ summary: "List svincolati coach profiles visible to the current user" })
   findCoaches(@CurrentUser() user: RequestUser) {
     return this.service.findCoaches(user);
+  }
+
+  @Get("directors")
+  @ApiOperation({ summary: "List svincolati director profiles visible to the current user" })
+  findDirectors(@CurrentUser() user: RequestUser) {
+    return this.service.findDirectors(user);
   }
 
   @Post(":profileId/assign-organization")

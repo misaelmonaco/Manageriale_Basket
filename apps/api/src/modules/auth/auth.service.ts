@@ -128,6 +128,31 @@ export class AuthService {
       });
     }
 
+    const requestedDirectorSlug = dto.organizationSlug?.trim();
+    const existingDirectorOrganization = requestedDirectorSlug
+      ? await this.prisma.organization.findUnique({
+          where: { slug: requestedDirectorSlug },
+        })
+      : null;
+
+    if (dto.role === Role.DIRECTOR && existingDirectorOrganization) {
+      const user = await this.prisma.user.create({
+        data: {
+          organizationId: existingDirectorOrganization.id,
+          email: dto.email,
+          passwordHash,
+          ...userProfile,
+          role: Role.DIRECTOR,
+        },
+      });
+
+      return this.issueSession(user, {
+        assignedToOrganization: true,
+        assignmentStatus: ProfileAssignmentStatus.UNASSIGNED,
+        organizationSlug: existingDirectorOrganization.slug,
+      });
+    }
+
     const organizationName =
       dto.organizationName?.trim() || `Organizzazione di ${username}`;
     const organizationSlug = await this.uniqueOrganizationSlug(

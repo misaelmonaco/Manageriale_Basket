@@ -4,6 +4,7 @@ import { IsEnum } from "class-validator";
 export enum AssignableProfileType {
   PLAYER = "PLAYER",
   COACH = "COACH",
+  DIRECTOR = "DIRECTOR",
 }
 
 export class ProfileTypeDto {

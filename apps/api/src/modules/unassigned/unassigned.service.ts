@@ -15,8 +15,8 @@ export class UnassignedService {
   ) {}
 
   async findAll(user: RequestUser) {
-    const [players, coaches] = await Promise.all([this.findPlayers(user), this.findCoaches(user)]);
-    return { players, coaches };
+    const [players, coaches, directors] = await Promise.all([this.findPlayers(user), this.findCoaches(user), this.findDirectors(user)]);
+    return { players, coaches, directors };
   }
 
   findPlayers(user: RequestUser) {
@@ -27,6 +27,10 @@ export class UnassignedService {
     return this.repository.findCoaches(this.repository.coachSvincolatiWhere(this.directorOrganizationId(user)));
   }
 
+  findDirectors(user: RequestUser) {
+    return this.repository.findDirectors(this.repository.directorSvincolatiWhere(this.directorOrganizationId(user), user.sub));
+  }
+
   async assignOrganization(user: RequestUser, profileId: string, dto: AssignOrganizationDto) {
     const organizationId = await this.targetOrganizationId(user, dto.organizationId);
 
@@ -34,7 +38,11 @@ export class UnassignedService {
       return this.assignPlayerOrganization(user, profileId, organizationId);
     }
 
-    return this.assignCoachOrganization(user, profileId, organizationId);
+    if (dto.profileType === AssignableProfileType.COACH) {
+      return this.assignCoachOrganization(user, profileId, organizationId);
+    }
+
+    return this.assignDirectorOrganization(user, profileId, organizationId);
   }
 
   async assignTeam(user: RequestUser, profileId: string, dto: AssignTeamDto) {
@@ -50,7 +58,11 @@ export class UnassignedService {
       return this.assignPlayerTeam(user, profileId, organizationId, team.id);
     }
 
-    return this.assignCoachTeam(user, profileId, organizationId, team.id);
+    if (dto.profileType === AssignableProfileType.COACH) {
+      return this.assignCoachTeam(user, profileId, organizationId, team.id);
+    }
+
+    return this.assignDirectorTeam(user, profileId, organizationId, team.id);
   }
 
   private directorOrganizationId(user: RequestUser) {
@@ -94,6 +106,12 @@ export class UnassignedService {
     }
   }
 
+  private assertDirectorIsSvincolato(director: { directorTeams: unknown[] }) {
+    if (director.directorTeams.length > 0) {
+      throw new BadRequestException("Director profile is already assigned to a team.");
+    }
+  }
+
   private async assignPlayerOrganization(user: RequestUser, profileId: string, organizationId: string) {
     const player = await this.prisma.player.findUnique({ where: { id: profileId }, include: { user: true } });
     if (!player) throw new NotFoundException("Player profile not found.");
@@ -132,6 +150,19 @@ export class UnassignedService {
         },
         include: { user: true, organization: true, teams: { include: { team: true } } },
       });
+    });
+  }
+
+  private async assignDirectorOrganization(user: RequestUser, profileId: string, organizationId: string) {
+    const director = await this.prisma.user.findUnique({ where: { id: profileId }, include: { directorTeams: true } });
+    if (!director || director.role !== Role.DIRECTOR) throw new NotFoundException("Director profile not found.");
+    this.assertDirectorCanUseProfile(user, director.organizationId);
+    this.assertDirectorIsSvincolato(director);
+
+    return this.prisma.user.update({
+      where: { id: profileId },
+      data: { organizationId },
+      include: { organization: true, directorTeams: { include: { team: true } } },
     });
   }
 
@@ -180,6 +211,30 @@ export class UnassignedService {
       return tx.coach.findUniqueOrThrow({
         where: { id: profileId },
         include: { user: true, organization: true, teams: { include: { team: true } } },
+      });
+    });
+  }
+
+  private async assignDirectorTeam(user: RequestUser, profileId: string, organizationId: string, teamId: string) {
+    const director = await this.prisma.user.findUnique({ where: { id: profileId }, include: { directorTeams: true } });
+    if (!director || director.role !== Role.DIRECTOR) throw new NotFoundException("Director profile not found.");
+    this.assertDirectorCanUseProfile(user, director.organizationId);
+    this.assertDirectorIsSvincolato(director);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: profileId },
+        data: { organizationId },
+      });
+      await tx.directorTeam.upsert({
+        where: { directorId_teamId: { directorId: profileId, teamId } },
+        update: {},
+        create: { directorId: profileId, teamId },
+      });
+
+      return tx.user.findUniqueOrThrow({
+        where: { id: profileId },
+        include: { organization: true, directorTeams: { include: { team: true } } },
       });
     });
   }
