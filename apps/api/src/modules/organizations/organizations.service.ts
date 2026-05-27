@@ -30,6 +30,11 @@ export class OrganizationsService {
         teams: {
           orderBy: { name: "asc" },
           include: { _count: { select: { players: true, coaches: true, trainings: true } } }
+        },
+        users: {
+          where: { role: "DIRECTOR" },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, firstName: true, lastName: true, email: true }
         }
       }
     });

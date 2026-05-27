@@ -19,6 +19,7 @@ type Organization = {
 
 type OrganizationDetail = Organization & {
   fiscalCode: string | null;
+  users: { id: string; firstName: string; lastName: string; email: string }[];
   _count: {
     users: number;
     teams: number;
@@ -34,6 +35,11 @@ type OrganizationDetail = Organization & {
     _count: { players: number; coaches: number; trainings: number };
   }[];
 };
+
+function directorName(organization: OrganizationDetail) {
+  const director = organization.users[0];
+  return director ? `${director.firstName} ${director.lastName}`.trim() || director.email : "Non assegnato";
+}
 
 export default function OrganizationsPage() {
   const [selected, setSelected] = useState<OrganizationDetail | null>(null);
@@ -141,6 +147,11 @@ export default function OrganizationsPage() {
             )}
           </div>
           <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
+            <p>
+              <span className="text-muted-foreground">Dirigente</span>
+              <br />
+              {directorName(selected)}
+            </p>
             <p>
               <span className="text-muted-foreground">Users</span>
               <br />

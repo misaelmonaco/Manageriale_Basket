@@ -16,6 +16,7 @@ type Organization = {
   email: string | null;
   phone: string | null;
   subscription: string;
+  users?: { id: string; firstName: string; lastName: string; email: string }[];
 };
 
 function selectedOrganizationId() {
@@ -37,6 +38,7 @@ export default function OrganizationSettingsPage() {
     phone: "",
     subscription: "",
   });
+  const [director, setDirector] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +69,12 @@ export default function OrganizationSettingsPage() {
           phone: organization.phone ?? "",
           subscription: organization.subscription,
         });
+        const firstDirector = organization.users?.[0];
+        setDirector(
+          firstDirector
+            ? `${firstDirector.firstName} ${firstDirector.lastName}`.trim() || firstDirector.email
+            : "",
+        );
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -137,6 +145,10 @@ export default function OrganizationSettingsPage() {
                 }
                 required
               />
+            </label>
+            <label className="block space-y-2">
+              <span className="text-sm font-medium">Dirigente</span>
+              <Input value={director || "Non assegnato"} disabled />
             </label>
             <label className="block space-y-2">
               <span className="text-sm font-medium">Slug</span>
