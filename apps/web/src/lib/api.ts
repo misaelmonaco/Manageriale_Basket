@@ -5,7 +5,11 @@ const baseUrl =
 
 export async function apiFetch<T>(
   path: string,
-  init: RequestInit & { token?: string; organizationId?: string; organizationSlug?: string } = {},
+  init: RequestInit & {
+    token?: string;
+    organizationId?: string;
+    organizationSlug?: string;
+  } = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
@@ -41,7 +45,8 @@ export function clientAuth() {
   return {
     token: localStorage.getItem("accessToken") ?? undefined,
     organizationId: localStorage.getItem("organizationId") || undefined,
-    organizationSlug: localStorage.getItem("selectedOrganizationSlug") || undefined,
+    organizationSlug:
+      localStorage.getItem("selectedOrganizationSlug") || undefined,
   };
 }
 
@@ -60,7 +65,10 @@ export function listArrayResource<T>(path: string) {
   return apiFetch<T[]>(path, clientAuth());
 }
 
-export function createResource<TPayload, TResult>(path: string, payload: TPayload) {
+export function createResource<TPayload, TResult>(
+  path: string,
+  payload: TPayload,
+) {
   return apiFetch<TResult>(path, {
     ...clientAuth(),
     method: "POST",
@@ -68,7 +76,10 @@ export function createResource<TPayload, TResult>(path: string, payload: TPayloa
   });
 }
 
-export function updateResource<TPayload, TResult>(path: string, payload: TPayload) {
+export function updateResource<TPayload, TResult>(
+  path: string,
+  payload: TPayload,
+) {
   return apiFetch<TResult>(path, {
     ...clientAuth(),
     method: "PATCH",
@@ -77,15 +88,22 @@ export function updateResource<TPayload, TResult>(path: string, payload: TPayloa
 }
 
 export function updateUserPassword(userId: string, password: string) {
-  return updateResource<{ password: string; organizationSlug?: string }, { success: boolean }>(
-    `/auth/users/${userId}/password`,
-    {
-      password,
-      organizationSlug:
-        typeof window === "undefined"
-          ? undefined
-          : localStorage.getItem("selectedOrganizationSlug") || undefined,
-    },
+  return updateResource<
+    { password: string; organizationSlug?: string },
+    { success: boolean }
+  >(`/auth/users/${userId}/password`, {
+    password,
+    organizationSlug:
+      typeof window === "undefined"
+        ? undefined
+        : localStorage.getItem("selectedOrganizationSlug") || undefined,
+  });
+}
+
+export function updateOwnPassword(password: string) {
+  return updateResource<{ password: string }, { success: boolean }>(
+    "/auth/me/password",
+    { password },
   );
 }
 

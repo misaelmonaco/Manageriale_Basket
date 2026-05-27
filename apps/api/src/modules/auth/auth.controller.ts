@@ -1,5 +1,21 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post } from "@nestjs/common";
-import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from "@nestjs/swagger";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+} from "@nestjs/common";
+import {
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from "@nestjs/swagger";
 import { Role } from "@prisma/client";
 import { CurrentUser } from "../../shared/auth/current-user.decorator";
 import { Public } from "../../shared/auth/public.decorator";
@@ -19,7 +35,9 @@ export class AuthController {
 
   @Public()
   @Post("register")
-  @ApiOperation({ summary: "Register the first SUPER_ADMIN or a new organization director" })
+  @ApiOperation({
+    summary: "Register the first SUPER_ADMIN or a new organization director",
+  })
   @ApiCreatedResponse({ type: AuthResponseDto })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
@@ -38,7 +56,9 @@ export class AuthController {
   @Public()
   @Post("refresh")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Rotate a valid refresh token and issue a new token pair" })
+  @ApiOperation({
+    summary: "Rotate a valid refresh token and issue a new token pair",
+  })
   @ApiOkResponse({ type: AuthResponseDto })
   refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refresh(dto.refreshToken);
@@ -47,7 +67,9 @@ export class AuthController {
   @Post("logout")
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Revoke active refresh tokens for the current user" })
+  @ApiOperation({
+    summary: "Revoke active refresh tokens for the current user",
+  })
   @ApiOkResponse({ schema: { example: { success: true } } })
   logout(@Body() dto: RefreshTokenDto) {
     return this.authService.logout(dto.refreshToken);
@@ -60,11 +82,32 @@ export class AuthController {
     return this.authService.me(user.sub);
   }
 
+  @Patch("me/password")
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Update the current user password" })
+  updateOwnPassword(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: UpdateUserPasswordDto,
+  ) {
+    return this.authService.updateOwnPassword(user.sub, dto.password);
+  }
+
   @Patch("users/:id/password")
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN, Role.DIRECTOR)
-  @ApiOperation({ summary: "Update a user password inside the selected organization" })
-  updateUserPassword(@CurrentUser() user: RequestUser, @Param("id") id: string, @Body() dto: UpdateUserPasswordDto) {
-    return this.authService.updateUserPassword(user, id, dto.password, dto.organizationSlug);
+  @ApiOperation({
+    summary: "Update a user password inside the selected organization",
+  })
+  updateUserPassword(
+    @CurrentUser() user: RequestUser,
+    @Param("id") id: string,
+    @Body() dto: UpdateUserPasswordDto,
+  ) {
+    return this.authService.updateUserPassword(
+      user,
+      id,
+      dto.password,
+      dto.organizationSlug,
+    );
   }
 }

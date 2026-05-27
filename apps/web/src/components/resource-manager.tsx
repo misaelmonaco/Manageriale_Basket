@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Search, Trash2, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "@/components/data-table";
@@ -21,7 +21,14 @@ export type FieldOption = { value: string; label: string };
 export type FieldConfig = {
   name: string;
   label: string;
-  type?: "text" | "email" | "password" | "number" | "date" | "datetime-local" | "select";
+  type?:
+    | "text"
+    | "email"
+    | "password"
+    | "number"
+    | "date"
+    | "datetime-local"
+    | "select";
   required?: boolean;
   min?: number;
   step?: number;
@@ -51,7 +58,7 @@ function getRole() {
 
 function defaultPayload(values: Record<string, string>) {
   return Object.fromEntries(
-    Object.entries(values).filter(([, value]) => value !== "")
+    Object.entries(values).filter(([, value]) => value !== ""),
   );
 }
 
@@ -74,6 +81,7 @@ export function ResourceManager<TItem extends { id: string }>({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const role = getRole();
   const canCreate = !createAllowedRoles || createAllowedRoles.includes(role);
@@ -81,7 +89,7 @@ export function ResourceManager<TItem extends { id: string }>({
 
   const emptyValues = useMemo(
     () => Object.fromEntries(fields.map((field) => [field.name, ""])),
-    [fields]
+    [fields],
   );
 
   async function load() {
@@ -91,7 +99,9 @@ export function ResourceManager<TItem extends { id: string }>({
       const response = await listResource<TItem>(endpoint);
       setItems(transformItems ? transformItems(response) : response.data);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load data.");
+      setError(
+        loadError instanceof Error ? loadError.message : "Unable to load data.",
+      );
     } finally {
       setLoading(false);
     }
@@ -112,38 +122,66 @@ export function ResourceManager<TItem extends { id: string }>({
       setOpen(false);
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to save.");
+      setError(
+        saveError instanceof Error ? saveError.message : "Unable to save.",
+      );
     } finally {
       setSaving(false);
     }
   }
 
   async function remove(item: TItem) {
+    const confirmed = window.confirm("Eliminare questo elemento?");
+    if (!confirmed) return;
+
     setError(null);
     try {
-      await deleteResource(updatePath ? updatePath(item) : `${endpoint}/${item.id}`);
+      await deleteResource(
+        updatePath ? updatePath(item) : `${endpoint}/${item.id}`,
+      );
       await load();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete.");
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Unable to delete.",
+      );
     }
   }
 
   const action = canCreate ? (
     <Button onClick={() => setOpen((current) => !current)}>
-      {open ? <X className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
+      {open ? (
+        <X className="mr-2 h-4 w-4" />
+      ) : (
+        <Plus className="mr-2 h-4 w-4" />
+      )}
       {open ? "Close" : actionLabel}
     </Button>
   ) : undefined;
 
-  const rows = items.map((item) =>
+  const filteredItems = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return items;
+    return items.filter((item) =>
+      JSON.stringify(item).toLowerCase().includes(normalized),
+    );
+  }, [items, query]);
+
+  const rows = filteredItems.map((item) =>
     mapRow(
       item,
       canDelete ? (
-        <Button variant="ghost" size="icon" aria-label="Delete" onClick={() => void remove(item)}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Delete"
+          onClick={() => void remove(item)}
+        >
           <Trash2 className="h-4 w-4" />
         </Button>
-      ) : null
-    )
+      ) : null,
+    ),
   );
 
   return (
@@ -151,7 +189,10 @@ export function ResourceManager<TItem extends { id: string }>({
       <PageHeader title={title} description={description} action={action} />
       {open && (
         <Card className="mb-6 p-4">
-          <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={submit}>
+          <form
+            className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+            onSubmit={submit}
+          >
             {fields.map((field) => (
               <label key={field.name} className="block space-y-2">
                 <span className="text-sm font-medium">{field.label}</span>
@@ -160,7 +201,10 @@ export function ResourceManager<TItem extends { id: string }>({
                     className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring"
                     value={values[field.name] ?? ""}
                     onChange={(event) =>
-                      setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                      setValues((current) => ({
+                        ...current,
+                        [field.name]: event.target.value,
+                      }))
                     }
                     required={field.required}
                   >
@@ -179,7 +223,10 @@ export function ResourceManager<TItem extends { id: string }>({
                     step={field.step}
                     placeholder={field.placeholder}
                     onChange={(event) =>
-                      setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                      setValues((current) => ({
+                        ...current,
+                        [field.name]: event.target.value,
+                      }))
                     }
                     required={field.required}
                   />
@@ -198,7 +245,23 @@ export function ResourceManager<TItem extends { id: string }>({
       {loading ? (
         <Card className="p-6 text-sm text-muted-foreground">Loading</Card>
       ) : (
-        <DataTable columns={[...columns, ""]} rows={rows} />
+        <>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label className="relative block w-full sm:max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Cerca"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+            <p className="text-sm text-muted-foreground">
+              {filteredItems.length} di {items.length}
+            </p>
+          </div>
+          <DataTable columns={[...columns, ""]} rows={rows} />
+        </>
       )}
     </>
   );

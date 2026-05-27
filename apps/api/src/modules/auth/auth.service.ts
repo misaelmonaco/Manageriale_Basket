@@ -76,9 +76,13 @@ export class AuthService {
     if (dto.role === Role.PLAYER || dto.role === Role.COACH) {
       const requestedSlug = dto.organizationSlug?.trim();
       const organization = requestedSlug
-        ? await this.prisma.organization.findUnique({ where: { slug: requestedSlug } })
+        ? await this.prisma.organization.findUnique({
+            where: { slug: requestedSlug },
+          })
         : null;
-      const assignmentStatus = organization ? ProfileAssignmentStatus.ASSIGNED : ProfileAssignmentStatus.UNASSIGNED;
+      const assignmentStatus = organization
+        ? ProfileAssignmentStatus.ASSIGNED
+        : ProfileAssignmentStatus.UNASSIGNED;
 
       const user = await this.prisma.$transaction(async (tx) => {
         const createdUser = await tx.user.create({
@@ -124,8 +128,11 @@ export class AuthService {
       });
     }
 
-    const organizationName = dto.organizationName?.trim() || `Organizzazione di ${username}`;
-    const organizationSlug = await this.uniqueOrganizationSlug(dto.organizationSlug?.trim() || username);
+    const organizationName =
+      dto.organizationName?.trim() || `Organizzazione di ${username}`;
+    const organizationSlug = await this.uniqueOrganizationSlug(
+      dto.organizationSlug?.trim() || username,
+    );
 
     const user = await this.prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({
@@ -238,24 +245,62 @@ export class AuthService {
         id: true,
         organizationId: true,
         email: true,
+        username: true,
         firstName: true,
         lastName: true,
         role: true,
+        organization: {
+          select: {
+            name: true,
+            slug: true,
+          },
+        },
       },
     });
   }
 
-  async updateUserPassword(admin: RequestUser, userId: string, password: string, organizationSlug?: string) {
-    const target = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  async updateOwnPassword(userId: string, password: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await this.hashSecret(password) },
+    });
+
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    return { success: true };
+  }
+
+  async updateUserPassword(
+    admin: RequestUser,
+    userId: string,
+    password: string,
+    organizationSlug?: string,
+  ) {
+    const target = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
 
     if (admin.role !== Role.SUPER_ADMIN) {
-      if (!admin.organizationId || target.organizationId !== admin.organizationId) {
-        throw new ForbiddenException("You can only update users in your organization.");
+      if (
+        !admin.organizationId ||
+        target.organizationId !== admin.organizationId
+      ) {
+        throw new ForbiddenException(
+          "You can only update users in your organization.",
+        );
       }
     } else if (target.organizationId) {
-      const organizationId = await this.tenant.resolveForUserOrSlug(admin, organizationSlug);
+      const organizationId = await this.tenant.resolveForUserOrSlug(
+        admin,
+        organizationSlug,
+      );
       if (target.organizationId !== organizationId) {
-        throw new ForbiddenException("User does not belong to the selected organization.");
+        throw new ForbiddenException(
+          "User does not belong to the selected organization.",
+        );
       }
     }
 
