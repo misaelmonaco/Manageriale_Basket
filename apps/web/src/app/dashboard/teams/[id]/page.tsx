@@ -96,7 +96,30 @@ export default function TeamDetailPage() {
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="border-b border-border p-4 sm:hidden">
+          <h2 className="text-base font-semibold">Players</h2>
+        </div>
+        <div className="space-y-3 p-4 sm:hidden">
+          {team.players.length === 0 && <p className="text-sm text-muted-foreground">No players</p>}
+          {team.players.map((player) => {
+            const latestPayment = player.payments[0];
+            return (
+              <div key={player.id} className="rounded-md border border-border p-3 text-sm">
+                <Link className="font-medium text-primary underline-offset-4 hover:underline" href={`/dashboard/players/${player.id}`}>
+                  {playerName(player)}
+                </Link>
+                <div className="mt-2 grid gap-2 text-muted-foreground">
+                  <p className="break-words">{player.user?.email ?? ""}</p>
+                  <p>Birth date: {isoDate(player.birthDate)}</p>
+                  <p>Jersey: {player.jerseyNumber ?? ""}</p>
+                  <p>Medical: {isoDate(player.medicalExpiresAt)}</p>
+                  {latestPayment && <p>Latest payment: {fromCents(latestPayment.amountCents)} - {latestPayment.status}</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[820px] text-left text-sm">
             <thead className="bg-muted text-muted-foreground">
               <tr>

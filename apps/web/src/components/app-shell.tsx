@@ -170,7 +170,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
-      <aside className={cn("fixed inset-y-0 left-0 z-40 w-64 border-r border-border bg-card p-4 transition lg:static lg:block", open ? "translate-x-0" : "-translate-x-full lg:translate-x-0")}>
+      {open && <button type="button" className="fixed inset-0 z-30 bg-foreground/35 lg:hidden" aria-label="Close navigation" onClick={() => setOpen(false)} />}
+      <aside className={cn("fixed inset-y-0 left-0 z-40 w-[min(18rem,82vw)] border-r border-border bg-card p-4 transition lg:static lg:block lg:w-auto", open ? "translate-x-0" : "-translate-x-full lg:translate-x-0")}>
         {logoUrl && (
           <div className="mb-8">
             <img src={logoUrl} alt={organizationName || "Organization logo"} className="max-h-14 max-w-[180px] object-contain" />
@@ -195,24 +196,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
       <div className="min-w-0">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-primary bg-primary px-4 text-primary-foreground lg:px-8" style={{ borderTop: "3px solid hsl(var(--accent))" }}>
+        <header className="sticky top-0 z-30 flex min-h-16 items-center gap-3 border-b border-primary bg-primary px-3 py-2 text-primary-foreground sm:px-4 lg:px-8" style={{ borderTop: "3px solid hsl(var(--accent))" }}>
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setOpen(true)} aria-label="Open navigation">
             <Menu className="h-5 w-5" />
           </Button>
-          <div>
-            <p className="text-xs uppercase text-primary-foreground/75">Signed in as</p>
-            <p className="text-sm font-medium">{userLabel}</p>
+          <div className="min-w-0 flex-1">
+            <p className="hidden text-xs uppercase text-primary-foreground/75 sm:block">Signed in as</p>
+            <p className="truncate text-sm font-medium">{userLabel}</p>
             <p className="text-xs text-primary-foreground/75">{roleLabel(role)}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <button
               type="button"
-              className="flex h-9 items-center gap-2 rounded-full border border-primary-foreground/25 bg-primary-foreground/10 px-2 text-primary-foreground transition hover:bg-primary-foreground/15"
+              className="flex h-9 items-center gap-1 rounded-full border border-primary-foreground/25 bg-primary-foreground/10 px-2 text-primary-foreground transition hover:bg-primary-foreground/15 sm:gap-2"
               onClick={toggleTheme}
               aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
             >
               <Sun className="h-4 w-4" />
-              <span className="relative h-5 w-10 rounded-full bg-muted">
+              <span className="relative hidden h-5 w-10 rounded-full bg-muted sm:block">
                 <span
                   className={cn(
                     "absolute top-0.5 h-4 w-4 rounded-full bg-primary-foreground transition",
@@ -225,16 +226,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Button
               variant="outline"
               size="sm"
-              className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/15"
+              className="border-primary-foreground/30 bg-primary-foreground/10 px-2 text-primary-foreground hover:bg-primary-foreground/15 sm:px-3"
               onClick={handleLogout}
               disabled={loggingOut}
+              aria-label="Logout"
             >
-              <LogOut className="mr-2 h-4 w-4" />
-              {loggingOut ? "Logging out" : "Logout"}
+              <LogOut className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">{loggingOut ? "Logging out" : "Logout"}</span>
             </Button>
           </div>
         </header>
-        <main className="p-4 lg:p-8">{children}</main>
+        <main className="p-3 sm:p-4 lg:p-8">{children}</main>
       </div>
     </div>
   );

@@ -28,6 +28,15 @@ function statusClass(status: string) {
   return status === "PAID" ? "bg-emerald-500" : "bg-red-500";
 }
 
+function PaymentStatus({ status }: { status: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-md border border-border px-2.5 py-1 text-xs font-medium">
+      <span className={`h-2.5 w-2.5 rounded-full ${statusClass(status)}`} />
+      {status === "PAID" ? "Pagato" : "Da pagare"}
+    </span>
+  );
+}
+
 export default function PlayerDetailPage() {
   const params = useParams<{ id: string }>();
   const [player, setPlayer] = useState<PlayerDetail | null>(null);
@@ -118,7 +127,24 @@ export default function PlayerDetailPage() {
           <div className="border-b border-border p-4">
             <h2 className="text-base font-semibold">Payments</h2>
           </div>
-          <div className="overflow-x-auto">
+          <div className="space-y-3 p-4 sm:hidden">
+            {player.payments.length === 0 && <p className="text-sm text-muted-foreground">No payments</p>}
+            {player.payments.map((payment) => (
+              <div key={payment.id} className="rounded-md border border-border p-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words font-medium">{payment.description}</p>
+                    <p className="text-muted-foreground">Due {isoDate(payment.dueDate)}</p>
+                  </div>
+                  <p className="shrink-0 font-semibold">{fromCents(payment.amountCents)}</p>
+                </div>
+                <div className="mt-3">
+                  <PaymentStatus status={payment.status} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full min-w-[620px] text-left text-sm">
               <thead className="bg-muted text-muted-foreground">
                 <tr>
@@ -138,10 +164,7 @@ export default function PlayerDetailPage() {
                     <td className="px-4 py-3">{fromCents(payment.amountCents)}</td>
                     <td className="px-4 py-3">{isoDate(payment.dueDate)}</td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-2 rounded-md border border-border px-2.5 py-1 text-xs font-medium">
-                        <span className={`h-2.5 w-2.5 rounded-full ${statusClass(payment.status)}`} />
-                        {payment.status === "PAID" ? "Pagato" : "Da pagare"}
-                      </span>
+                      <PaymentStatus status={payment.status} />
                     </td>
                   </tr>
                 ))}
