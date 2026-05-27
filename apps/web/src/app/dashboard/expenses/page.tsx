@@ -1,6 +1,11 @@
 "use client";
 
-import { ResourceManager, fromCents, isoDate, toCents } from "@/components/resource-manager";
+import {
+  ResourceManager,
+  fromCents,
+  isoDate,
+  toCents,
+} from "@/components/resource-manager";
 
 type Expense = {
   id: string;
@@ -18,13 +23,21 @@ export default function ExpensesPage() {
       description="Director finance controls for club operating costs."
       actionLabel="Record expense"
       endpoint="/expenses"
+      exportFilename="expenses.csv"
       columns={["Category", "Vendor", "Amount", "Spent at", "Notes"]}
       createAllowedRoles={["SUPER_ADMIN", "DIRECTOR"]}
       deleteAllowedRoles={["SUPER_ADMIN", "DIRECTOR"]}
       fields={[
         { name: "category", label: "Category", required: true },
         { name: "vendor", label: "Vendor", required: true },
-        { name: "amount", label: "Amount", type: "number", min: 0.01, step: 0.01, required: true },
+        {
+          name: "amount",
+          label: "Amount",
+          type: "number",
+          min: 0.01,
+          step: 0.01,
+          required: true,
+        },
         { name: "spentAt", label: "Spent at", type: "date", required: true },
         { name: "notes", label: "Notes" },
       ]}
@@ -43,6 +56,15 @@ export default function ExpensesPage() {
         expense.notes ?? "",
         actions,
       ]}
+      exportRows={(expenses) =>
+        expenses.map((expense) => ({
+          Category: expense.category,
+          Vendor: expense.vendor,
+          Amount: fromCents(expense.amountCents),
+          "Spent at": isoDate(expense.spentAt),
+          Notes: expense.notes ?? "",
+        }))
+      }
     />
   );
 }

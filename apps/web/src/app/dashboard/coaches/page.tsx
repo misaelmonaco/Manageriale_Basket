@@ -14,12 +14,16 @@ type Coach = {
 
 export default function CoachesPage() {
   async function changePassword(coach: Coach) {
-    const password = window.prompt(`New password for ${coach.user.firstName} ${coach.user.lastName}`);
+    const password = window.prompt(
+      `New password for ${coach.user.firstName} ${coach.user.lastName}`,
+    );
     if (!password) return;
     try {
       await updateUserPassword(coach.user.id, password);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Unable to update password.");
+      window.alert(
+        error instanceof Error ? error.message : "Unable to update password.",
+      );
     }
   }
 
@@ -29,21 +33,32 @@ export default function CoachesPage() {
       description="Coach profiles, licenses, and team assignments."
       actionLabel="New coach"
       endpoint="/coaches"
+      exportFilename="coaches.csv"
       columns={["Name", "Email", "License", "Teams"]}
       createAllowedRoles={["SUPER_ADMIN", "DIRECTOR"]}
       deleteAllowedRoles={["SUPER_ADMIN", "DIRECTOR"]}
-      transformItems={(response) => (Array.isArray(response) ? response : response.data)}
+      transformItems={(response) =>
+        Array.isArray(response) ? response : response.data
+      }
       fields={[
         { name: "firstName", label: "Name", required: true },
         { name: "lastName", label: "Surname" },
         { name: "username", label: "Username" },
         { name: "email", label: "Email", type: "email", required: true },
-        { name: "password", label: "Password", type: "password", required: true },
+        {
+          name: "password",
+          label: "Password",
+          type: "password",
+          required: true,
+        },
         { name: "licenseNumber", label: "License" },
       ]}
       buildPayload={(values) => ({
-        ...Object.fromEntries(Object.entries(values).filter(([, value]) => value !== "")),
-        organizationSlug: localStorage.getItem("selectedOrganizationSlug") || undefined,
+        ...Object.fromEntries(
+          Object.entries(values).filter(([, value]) => value !== ""),
+        ),
+        organizationSlug:
+          localStorage.getItem("selectedOrganizationSlug") || undefined,
       })}
       mapRow={(coach, actions) => [
         `${coach.user.firstName} ${coach.user.lastName}`,
@@ -51,12 +66,25 @@ export default function CoachesPage() {
         coach.licenseNumber ?? "",
         String(coach.teams.length),
         <div key="actions" className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" aria-label="Change password" onClick={() => void changePassword(coach)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Change password"
+            onClick={() => void changePassword(coach)}
+          >
             <KeyRound className="h-4 w-4" />
           </Button>
           {actions}
         </div>,
       ]}
+      exportRows={(coaches) =>
+        coaches.map((coach) => ({
+          Name: `${coach.user.firstName} ${coach.user.lastName}`,
+          Email: coach.user.email,
+          License: coach.licenseNumber ?? "",
+          Teams: coach.teams.length,
+        }))
+      }
     />
   );
 }

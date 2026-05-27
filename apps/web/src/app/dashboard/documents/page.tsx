@@ -9,8 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { apiFetch, clientAuth, createResource } from "@/lib/api";
+import { downloadCsv } from "@/lib/csv";
 
-type DocumentAudience = "DIRECTORS" | "COACHES" | "PLAYERS" | "COACHES_PLAYERS" | "ALL";
+type DocumentAudience =
+  | "DIRECTORS"
+  | "COACHES"
+  | "PLAYERS"
+  | "COACHES_PLAYERS"
+  | "ALL";
 type Role = "SUPER_ADMIN" | "DIRECTOR" | "COACH" | "PLAYER" | "PARENT";
 type DocumentItem = {
   id: string;
@@ -19,7 +25,12 @@ type DocumentItem = {
   storageKey: string;
   audience: DocumentAudience;
   createdAt: string;
-  uploadedBy: { firstName: string; lastName: string; email: string; role: Role };
+  uploadedBy: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: Role;
+  };
 };
 
 const audiences: { value: DocumentAudience; label: string }[] = [
@@ -45,7 +56,10 @@ function readFile(file: File) {
 }
 
 function uploadedBy(document: DocumentItem) {
-  return `${document.uploadedBy.firstName} ${document.uploadedBy.lastName}`.trim() || document.uploadedBy.email;
+  return (
+    `${document.uploadedBy.firstName} ${document.uploadedBy.lastName}`.trim() ||
+    document.uploadedBy.email
+  );
 }
 
 function audienceLabel(audience: DocumentAudience) {
@@ -65,7 +79,11 @@ function DownloadButton({ document }: { document: DocumentItem }) {
 
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [form, setForm] = useState({ name: "", audience: "COACHES_PLAYERS" as DocumentAudience, file: null as File | null });
+  const [form, setForm] = useState({
+    name: "",
+    audience: "COACHES_PLAYERS" as DocumentAudience,
+    file: null as File | null,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +97,11 @@ export default function DocumentsPage() {
     try {
       setDocuments(await apiFetch<DocumentItem[]>("/documents", clientAuth()));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load documents.");
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to load documents.",
+      );
     } finally {
       setLoading(false);
     }
@@ -106,11 +128,17 @@ export default function DocumentsPage() {
         audience: canForward ? form.audience : "DIRECTORS",
       });
       setForm({ name: "", audience: "COACHES_PLAYERS", file: null });
-      const fileInput = document.getElementById("document-file") as HTMLInputElement | null;
+      const fileInput = document.getElementById(
+        "document-file",
+      ) as HTMLInputElement | null;
       if (fileInput) fileInput.value = "";
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to upload document.");
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to upload document.",
+      );
     } finally {
       setSaving(false);
     }
@@ -120,15 +148,51 @@ export default function DocumentsPage() {
     <>
       <PageHeader
         title="Documents"
-        description={canForward ? "Forward documents and information to coaches and players." : "Read shared documents and download files."}
+        description={
+          canForward
+            ? "Forward documents and information to coaches and players."
+            : "Read shared documents and download files."
+        }
+        action={
+          <Button
+            variant="outline"
+            disabled={documents.length === 0}
+            onClick={() =>
+              downloadCsv(
+                "documents.csv",
+                documents.map((document) => ({
+                  Title: document.name,
+                  Accessibility: audienceLabel(document.audience),
+                  "Uploaded by": uploadedBy(document),
+                  Created: isoDateTime(document.createdAt),
+                })),
+              )
+            }
+          >
+            <Download className="mr-2 h-4 w-4" />
+            CSV
+          </Button>
+        }
       />
 
       {canUpload && (
         <Card className="mb-6 p-4">
-          <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" onSubmit={submit}>
+          <form
+            className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+            onSubmit={submit}
+          >
             <label className="block space-y-2">
               <span className="text-sm font-medium">Title</span>
-              <Input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Document title" />
+              <Input
+                value={form.name}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder="Document title"
+              />
             </label>
             {canForward && (
               <label className="block space-y-2">
@@ -136,7 +200,12 @@ export default function DocumentsPage() {
                 <select
                   className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring"
                   value={form.audience}
-                  onChange={(event) => setForm((current) => ({ ...current, audience: event.target.value as DocumentAudience }))}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      audience: event.target.value as DocumentAudience,
+                    }))
+                  }
                 >
                   {audiences.map((audience) => (
                     <option key={audience.value} value={audience.value}>
@@ -148,11 +217,25 @@ export default function DocumentsPage() {
             )}
             <label className="block space-y-2">
               <span className="text-sm font-medium">File</span>
-              <Input id="document-file" type="file" onChange={(event) => setForm((current) => ({ ...current, file: event.target.files?.[0] ?? null }))} required />
+              <Input
+                id="document-file"
+                type="file"
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    file: event.target.files?.[0] ?? null,
+                  }))
+                }
+                required
+              />
             </label>
             <div className="flex items-end">
               <Button className="w-full" disabled={saving}>
-                {canForward ? <Send className="mr-2 h-4 w-4" /> : <Upload className="mr-2 h-4 w-4" />}
+                {canForward ? (
+                  <Send className="mr-2 h-4 w-4" />
+                ) : (
+                  <Upload className="mr-2 h-4 w-4" />
+                )}
                 {saving ? "Saving" : canForward ? "Forward" : "Upload"}
               </Button>
             </div>
@@ -179,7 +262,10 @@ export default function DocumentsPage() {
               <tbody>
                 {documents.length === 0 && (
                   <tr>
-                    <td className="px-4 py-8 text-center text-muted-foreground" colSpan={5}>
+                    <td
+                      className="px-4 py-8 text-center text-muted-foreground"
+                      colSpan={5}
+                    >
                       No documents
                     </td>
                   </tr>
@@ -187,10 +273,16 @@ export default function DocumentsPage() {
                 {documents.map((document) => (
                   <tr key={document.id} className="border-t border-border">
                     <td className="px-4 py-3 font-medium">{document.name}</td>
-                    <td className="px-4 py-3">{audienceLabel(document.audience)}</td>
+                    <td className="px-4 py-3">
+                      {audienceLabel(document.audience)}
+                    </td>
                     <td className="px-4 py-3">{uploadedBy(document)}</td>
-                    <td className="px-4 py-3">{isoDateTime(document.createdAt)}</td>
-                    <td className="px-4 py-3 text-right"><DownloadButton document={document} /></td>
+                    <td className="px-4 py-3">
+                      {isoDateTime(document.createdAt)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <DownloadButton document={document} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -206,15 +298,23 @@ export default function DocumentsPage() {
                   <FileText className="h-5 w-5" />
                 </div>
                 <h2 className="text-base font-semibold">{document.name}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Shared by {uploadedBy(document)}</p>
-                <p className="text-sm text-muted-foreground">{isoDateTime(document.createdAt)}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Shared by {uploadedBy(document)}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {isoDateTime(document.createdAt)}
+                </p>
               </div>
               <div className="mt-auto">
                 <DownloadButton document={document} />
               </div>
             </Card>
           ))}
-          {documents.length === 0 && <Card className="p-6 text-sm text-muted-foreground">No forwarded documents</Card>}
+          {documents.length === 0 && (
+            <Card className="p-6 text-sm text-muted-foreground">
+              No forwarded documents
+            </Card>
+          )}
         </div>
       )}
     </>

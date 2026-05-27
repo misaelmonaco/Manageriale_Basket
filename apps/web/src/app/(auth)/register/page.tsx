@@ -1,19 +1,40 @@
 "use client";
 
-import { UserPlus } from "lucide-react";
+import { Building2, Dumbbell, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { register, type RegisterPayload } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 const registrationRoles = [
-  { value: "PLAYER", label: "Giocatore" },
-  { value: "DIRECTOR", label: "Dirigente" },
-  { value: "COACH", label: "Coach" },
-  { value: "SUPER_ADMIN", label: "SUPER_ADMIN" },
-] satisfies { value: RegisterPayload["role"]; label: string }[];
+  {
+    value: "DIRECTOR",
+    label: "Societa",
+    description: "Creo una nuova organizzazione e la gestisco come dirigente.",
+    icon: Building2,
+  },
+  {
+    value: "PLAYER",
+    label: "Giocatore",
+    description:
+      "Mi iscrivo come atleta e posso indicare lo slug della societa.",
+    icon: UserPlus,
+  },
+  {
+    value: "COACH",
+    label: "Coach",
+    description: "Mi iscrivo come allenatore e posso collegarmi a una societa.",
+    icon: Dumbbell,
+  },
+] satisfies {
+  value: RegisterPayload["role"];
+  label: string;
+  description: string;
+  icon: typeof Building2;
+}[];
 
 export default function RegisterPage() {
   const [form, setForm] = useState({
@@ -24,13 +45,16 @@ export default function RegisterPage() {
     firstName: "",
     lastName: "",
     birthDate: "",
-    role: "PLAYER" as RegisterPayload["role"],
+    role: "DIRECTOR" as RegisterPayload["role"],
     organizationName: "",
     organizationSlug: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const selectedRole =
+    registrationRoles.find((role) => role.value === form.role) ??
+    registrationRoles[0]!;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,7 +76,10 @@ export default function RegisterPage() {
         lastName: form.lastName || undefined,
         birthDate: form.birthDate,
         role: form.role,
-        organizationName: form.organizationName || undefined,
+        organizationName:
+          form.role === "DIRECTOR"
+            ? form.organizationName || undefined
+            : undefined,
         organizationSlug: form.organizationSlug || undefined,
       });
       setForm((current) => ({
@@ -81,12 +108,49 @@ export default function RegisterPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
-      <Card className="w-full max-w-2xl p-6">
+      <Card className="w-full max-w-3xl p-6">
         <div className="mb-6">
           <p className="text-sm text-muted-foreground">Manageriale Basket</p>
           <h1 className="text-2xl font-semibold">Registrazione</h1>
         </div>
+
+        <div className="mb-6 grid gap-3 md:grid-cols-3">
+          {registrationRoles.map((role) => {
+            const Icon = role.icon;
+            const active = form.role === role.value;
+            return (
+              <button
+                key={role.value}
+                type="button"
+                className={cn(
+                  "rounded-md border border-border p-4 text-left transition hover:bg-muted",
+                  active && "border-primary bg-primary/10",
+                )}
+                onClick={() =>
+                  setForm((current) => ({
+                    ...current,
+                    role: role.value,
+                  }))
+                }
+              >
+                <Icon className="mb-3 h-5 w-5 text-primary" />
+                <p className="font-medium">{role.label}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {role.description}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
         <form className="space-y-4" onSubmit={submit}>
+          <div className="rounded-md border border-border bg-muted/40 p-4 text-sm">
+            <p className="font-medium">{selectedRole.label}</p>
+            <p className="mt-1 text-muted-foreground">
+              {selectedRole.description}
+            </p>
+          </div>
+
           <label className="block space-y-2">
             <span className="text-sm font-medium">Nome utente</span>
             <Input
@@ -94,7 +158,10 @@ export default function RegisterPage() {
               placeholder="nomeutente"
               value={form.username}
               onChange={(event) =>
-                setForm((current) => ({ ...current, username: event.target.value }))
+                setForm((current) => ({
+                  ...current,
+                  username: event.target.value,
+                }))
               }
               required
             />
@@ -107,7 +174,10 @@ export default function RegisterPage() {
               placeholder="utente@email.com"
               value={form.email}
               onChange={(event) =>
-                setForm((current) => ({ ...current, email: event.target.value }))
+                setForm((current) => ({
+                  ...current,
+                  email: event.target.value,
+                }))
               }
               required
             />
@@ -120,7 +190,10 @@ export default function RegisterPage() {
                 placeholder="Mario"
                 value={form.firstName}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, firstName: event.target.value }))
+                  setForm((current) => ({
+                    ...current,
+                    firstName: event.target.value,
+                  }))
                 }
               />
             </label>
@@ -131,7 +204,10 @@ export default function RegisterPage() {
                 placeholder="Rossi"
                 value={form.lastName}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, lastName: event.target.value }))
+                  setForm((current) => ({
+                    ...current,
+                    lastName: event.target.value,
+                  }))
                 }
               />
             </label>
@@ -145,7 +221,10 @@ export default function RegisterPage() {
                 placeholder="Password"
                 value={form.password}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, password: event.target.value }))
+                  setForm((current) => ({
+                    ...current,
+                    password: event.target.value,
+                  }))
                 }
                 required
                 minLength={8}
@@ -159,7 +238,10 @@ export default function RegisterPage() {
                 placeholder="Conferma password"
                 value={form.confirmPassword}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, confirmPassword: event.target.value }))
+                  setForm((current) => ({
+                    ...current,
+                    confirmPassword: event.target.value,
+                  }))
                 }
                 required
                 minLength={8}
@@ -173,62 +255,43 @@ export default function RegisterPage() {
                 type="date"
                 value={form.birthDate}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, birthDate: event.target.value }))
+                  setForm((current) => ({
+                    ...current,
+                    birthDate: event.target.value,
+                  }))
                 }
                 required
               />
             </label>
             <label className="block space-y-2">
-              <span className="text-sm font-medium">Ruolo</span>
-              <select
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring"
-                value={form.role}
+              <span className="text-sm font-medium">Slug societa</span>
+              <Input
+                pattern="[a-z0-9-]+"
+                placeholder="basket-roma"
+                value={form.organizationSlug}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    role: event.target.value as RegisterPayload["role"],
+                    organizationSlug: event.target.value,
                   }))
                 }
-                required
-              >
-                {registrationRoles.map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
           </div>
           {form.role === "DIRECTOR" && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-2">
-                <span className="text-sm font-medium">Nome organizzazione</span>
-                <Input
-                  placeholder="Basket Roma"
-                  value={form.organizationName}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      organizationName: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="block space-y-2">
-                <span className="text-sm font-medium">Slug organizzazione</span>
-                <Input
-                  pattern="[a-z0-9-]+"
-                  placeholder="basket-roma"
-                  value={form.organizationSlug}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      organizationSlug: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
+            <label className="block space-y-2">
+              <span className="text-sm font-medium">Nome societa</span>
+              <Input
+                placeholder="Basket Roma"
+                value={form.organizationName}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    organizationName: event.target.value,
+                  }))
+                }
+              />
+            </label>
           )}
           {error && <p className="text-sm text-primary">{error}</p>}
           {success && <p className="text-sm text-emerald-700">{success}</p>}
@@ -238,7 +301,7 @@ export default function RegisterPage() {
           </Button>
         </form>
         <Button asChild variant="ghost" className="mt-4 w-full">
-          <Link href="/login">Hai già un account? Accedi</Link>
+          <Link href="/login">Hai gia un account? Accedi</Link>
         </Button>
       </Card>
     </main>

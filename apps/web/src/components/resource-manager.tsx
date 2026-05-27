@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Search, Trash2, X } from "lucide-react";
+import { Download, Plus, Search, Trash2, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "@/components/data-table";
@@ -15,6 +15,7 @@ import {
   listResource,
   type ApiPage,
 } from "@/lib/api";
+import { type CsvRow, downloadCsv } from "@/lib/csv";
 
 export type FieldOption = { value: string; label: string };
 
@@ -49,6 +50,8 @@ type ResourceManagerProps<TItem extends { id: string }> = {
   createAllowedRoles?: string[];
   deleteAllowedRoles?: string[];
   transformItems?: (response: ApiPage<TItem> | TItem[]) => TItem[];
+  exportFilename?: string;
+  exportRows?: (items: TItem[]) => CsvRow[];
 };
 
 function getRole() {
@@ -75,6 +78,8 @@ export function ResourceManager<TItem extends { id: string }>({
   createAllowedRoles,
   deleteAllowedRoles,
   transformItems,
+  exportFilename,
+  exportRows,
 }: ResourceManagerProps<TItem>) {
   const [items, setItems] = useState<TItem[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -256,9 +261,27 @@ export function ResourceManager<TItem extends { id: string }>({
                 onChange={(event) => setQuery(event.target.value)}
               />
             </label>
-            <p className="text-sm text-muted-foreground">
-              {filteredItems.length} di {items.length}
-            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <p className="text-sm text-muted-foreground">
+                {filteredItems.length} di {items.length}
+              </p>
+              {exportRows && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={filteredItems.length === 0}
+                  onClick={() =>
+                    downloadCsv(
+                      exportFilename ?? `${title.toLowerCase()}.csv`,
+                      exportRows(filteredItems),
+                    )
+                  }
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  CSV
+                </Button>
+              )}
+            </div>
           </div>
           <DataTable columns={[...columns, ""]} rows={rows} />
         </>
