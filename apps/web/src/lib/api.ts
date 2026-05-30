@@ -100,10 +100,13 @@ export function updateUserPassword(userId: string, password: string) {
   });
 }
 
-export function updateOwnPassword(password: string) {
-  return updateResource<{ password: string }, { success: boolean }>(
+export function updateOwnPassword(currentPassword: string, password: string) {
+  return updateResource<
+    { currentPassword: string; password: string },
+    { success: boolean }
+  >(
     "/auth/me/password",
-    { password },
+    { currentPassword, password },
   );
 }
 

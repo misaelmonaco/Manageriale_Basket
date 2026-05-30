@@ -22,6 +22,7 @@ type Profile = {
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(true);
@@ -61,7 +62,8 @@ export default function ProfilePage() {
 
     setSaving(true);
     try {
-      await updateOwnPassword(password);
+      await updateOwnPassword(currentPassword, password);
+      setCurrentPassword("");
       setPassword("");
       setConfirmPassword("");
       setSuccess(
@@ -125,6 +127,16 @@ export default function ProfilePage() {
               <h2 className="text-base font-semibold">Cambio password</h2>
             </div>
             <form className="space-y-4" onSubmit={submit}>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">Password attuale</span>
+                <Input
+                  type="password"
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  required
+                />
+              </label>
               <label className="block space-y-2">
                 <span className="text-sm font-medium">Nuova password</span>
                 <Input

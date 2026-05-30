@@ -26,6 +26,7 @@ import { AuthResponseDto } from "./dto/auth-response.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { UpdateOwnPasswordDto } from "./dto/update-own-password.dto";
 import { UpdateUserPasswordDto } from "./dto/update-user-password.dto";
 
 @ApiTags("Auth")
@@ -87,9 +88,13 @@ export class AuthController {
   @ApiOperation({ summary: "Update the current user password" })
   updateOwnPassword(
     @CurrentUser() user: RequestUser,
-    @Body() dto: UpdateUserPasswordDto,
+    @Body() dto: UpdateOwnPasswordDto,
   ) {
-    return this.authService.updateOwnPassword(user.sub, dto.password);
+    return this.authService.updateOwnPassword(
+      user.sub,
+      dto.currentPassword,
+      dto.password,
+    );
   }
 
   @Patch("users/:id/password")

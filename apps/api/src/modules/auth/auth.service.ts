@@ -284,7 +284,24 @@ export class AuthService {
     });
   }
 
-  async updateOwnPassword(userId: string, password: string) {
+  async updateOwnPassword(
+    userId: string,
+    currentPassword: string,
+    password: string,
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException("Invalid credentials.");
+    }
+
+    const isCurrentPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.passwordHash,
+    );
+    if (!isCurrentPasswordValid) {
+      throw new UnauthorizedException("Current password is not correct.");
+    }
+
     await this.prisma.user.update({
       where: { id: userId },
       data: { passwordHash: await this.hashSecret(password) },
