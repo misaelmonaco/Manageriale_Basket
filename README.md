@@ -1,4 +1,4 @@
-# Manageriale Basket
+# CourtVision
 
 Gestionale SaaS multi-tenant per societa' di basket. Il progetto contiene un frontend Next.js, un backend NestJS, un database PostgreSQL gestito con Prisma e pacchetti condivisi TypeScript.
 
@@ -30,7 +30,7 @@ corepack enable
 1. Entrare nella cartella principale del progetto:
 
 ```bash
-cd Manageriale_Basket
+cd CourtVision
 ```
 
 2. Installare le dipendenze del monorepo:
@@ -247,7 +247,7 @@ Applica le migrazioni Prisma in sviluppo.
 Il repository e' un monorepo pnpm orchestrato con Turbo.
 
 ```text
-Manageriale_Basket/
+CourtVision/
   apps/
     api/                 Backend NestJS
     web/                 Frontend Next.js

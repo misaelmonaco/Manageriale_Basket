@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CreditCard, Shield, Trophy, Users } from "lucide-react";
+import { CalendarDays, CreditCard, Euro, Shield, Trophy, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
@@ -23,7 +23,21 @@ type Match = { id: string; opponentName: string; startsAt: string; location: str
 type Payment = { id: string; description: string; amountCents: number; dueDate: string; status: string };
 type Overview =
   | { role: "SUPER_ADMIN"; totals: { organizations: number }; organizations: Organization[] }
-  | { role: "DIRECTOR"; totals: { totalPlayers: number; playersWithDuePayments: number; matches: number; trainings: number }; matches: Match[]; trainings: Training[] }
+  | {
+      role: "DIRECTOR";
+      totals: {
+        totalPlayers: number;
+        playersWithDuePayments: number;
+        matches: number;
+        trainings: number;
+        paymentAmountCents: number;
+        receivedPaymentAmountCents: number;
+        pendingPaymentAmountCents: number;
+        expenseAmountCents: number;
+      };
+      matches: Match[];
+      trainings: Training[];
+    }
   | { role: "COACH"; totals: { trainings: number; matches: number }; trainings: Training[]; matches: Match[] }
   | { role: "PLAYER" | "PARENT"; totals?: { trainings: number; matches: number; payments: number }; trainings: Training[]; matches: Match[]; payments: Payment[] };
 
@@ -41,6 +55,62 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: number |
 
 function Empty({ children }: { children: string }) {
   return <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">{children}</p>;
+}
+
+function ratioPercent(value: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
+}
+
+function GaugeCard({
+  title,
+  value,
+  total,
+  valueLabel,
+  totalLabel,
+  icon: Icon,
+}: {
+  title: string;
+  value: number;
+  total: number;
+  valueLabel: string;
+  totalLabel: string;
+  icon: typeof Users;
+}) {
+  const percent = ratioPercent(value, total);
+  const background = `conic-gradient(hsl(var(--primary)) 0deg ${percent * 1.8}deg, hsl(var(--accent)) ${percent * 1.8}deg 180deg, transparent 180deg 360deg)`;
+
+  return (
+    <Card className="p-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">{title}</h2>
+          <p className="text-sm text-muted-foreground">{valueLabel}</p>
+        </div>
+        <Icon className="h-5 w-5 text-primary" />
+      </div>
+      <div className="mx-auto w-full max-w-[260px]">
+        <div className="relative aspect-[2/1] overflow-hidden">
+          <div className="absolute inset-0 rounded-t-full" style={{ background }} />
+          <div className="absolute inset-x-[13%] bottom-0 aspect-[2/1] rounded-t-full bg-card" />
+          <div className="absolute inset-x-0 bottom-1 text-center">
+            <p className="text-3xl font-semibold">{percent}%</p>
+            <p className="text-xs text-muted-foreground">{totalLabel}</p>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div className="rounded-md border border-border p-3">
+          <p className="text-muted-foreground">{valueLabel}</p>
+          <p className="mt-1 font-semibold">{fromCents(value)}</p>
+        </div>
+        <div className="rounded-md border border-border p-3">
+          <p className="text-muted-foreground">{totalLabel}</p>
+          <p className="mt-1 font-semibold">{fromCents(total)}</p>
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 function EventList({ title, events, type }: { title: string; events: (Training | Match)[]; type: "training" | "match" }) {
@@ -122,6 +192,24 @@ function DirectorOverview({ overview }: { overview: Extract<Overview, { role: "D
         <StatCard label="Trainings next month" value={overview.totals.trainings} icon={CalendarDays} />
         <StatCard label="Players" value={overview.totals.totalPlayers} icon={Users} />
         <StatCard label="Players with due payments" value={overview.totals.playersWithDuePayments} icon={CreditCard} />
+      </section>
+      <section className="mb-6 grid gap-4 xl:grid-cols-2">
+        <GaugeCard
+          title="Payments vs expenses"
+          value={overview.totals.paymentAmountCents}
+          total={overview.totals.expenseAmountCents}
+          valueLabel="Payments"
+          totalLabel="Expenses"
+          icon={Euro}
+        />
+        <GaugeCard
+          title="Received vs open"
+          value={overview.totals.receivedPaymentAmountCents}
+          total={overview.totals.receivedPaymentAmountCents + overview.totals.pendingPaymentAmountCents}
+          valueLabel="Received"
+          totalLabel="Expected"
+          icon={CreditCard}
+        />
       </section>
       <div className="grid gap-6 xl:grid-cols-2">
         <EventList title="Matches next month" events={overview.matches} type="match" />

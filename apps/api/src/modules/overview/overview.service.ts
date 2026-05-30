@@ -35,7 +35,16 @@ export class OverviewService {
     const nextMonth = new Date(now);
     nextMonth.setMonth(nextMonth.getMonth() + 1);
 
-    const [matches, trainings, totalPlayers, playersWithDuePayments] = await this.prisma.$transaction([
+    const [
+      matches,
+      trainings,
+      totalPlayers,
+      playersWithDuePayments,
+      paymentTotals,
+      receivedPaymentTotals,
+      pendingPaymentTotals,
+      expenseTotals,
+    ] = await this.prisma.$transaction([
       this.prisma.match.findMany({
         where: { organizationId, startsAt: { gte: now, lt: nextMonth } },
         include: { homeTeam: { select: { id: true, name: true, season: true } } },
@@ -53,11 +62,36 @@ export class OverviewService {
           payments: { some: { status: { in: [PaymentStatus.DUE, PaymentStatus.OVERDUE] } } },
         },
       }),
+      this.prisma.payment.aggregate({
+        where: { organizationId, status: { not: PaymentStatus.CANCELLED } },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { organizationId, status: PaymentStatus.PAID },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { organizationId, status: { in: [PaymentStatus.DUE, PaymentStatus.OVERDUE] } },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.expense.aggregate({
+        where: { organizationId },
+        _sum: { amountCents: true },
+      }),
     ]);
 
     return {
       role: Role.DIRECTOR,
-      totals: { totalPlayers, playersWithDuePayments, matches: matches.length, trainings: trainings.length },
+      totals: {
+        totalPlayers,
+        playersWithDuePayments,
+        matches: matches.length,
+        trainings: trainings.length,
+        paymentAmountCents: paymentTotals._sum.amountCents ?? 0,
+        receivedPaymentAmountCents: receivedPaymentTotals._sum.amountCents ?? 0,
+        pendingPaymentAmountCents: pendingPaymentTotals._sum.amountCents ?? 0,
+        expenseAmountCents: expenseTotals._sum.amountCents ?? 0,
+      },
       matches,
       trainings,
     };

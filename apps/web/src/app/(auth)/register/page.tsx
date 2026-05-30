@@ -110,7 +110,7 @@ export default function RegisterPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
       <Card className="w-full max-w-3xl p-6">
         <div className="mb-6">
-          <p className="text-sm text-muted-foreground">Manageriale Basket</p>
+          <p className="text-sm text-muted-foreground">CourtVision</p>
           <h1 className="text-2xl font-semibold">Registrazione</h1>
         </div>
 

@@ -26,7 +26,7 @@ async function bootstrap() {
   );
 
   const swagger = new DocumentBuilder()
-    .setTitle("Manageriale Basket API")
+    .setTitle("CourtVision API")
     .setDescription("Multi-tenant basketball club management REST API")
     .setVersion("1.0")
     .addBearerAuth()
