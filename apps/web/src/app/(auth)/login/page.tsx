@@ -49,7 +49,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-24">
       <Card className="relative mt-12 w-full max-w-md overflow-visible p-6 pt-24">
         <div className="absolute left-1/2 top-0 flex h-32 w-56 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background px-5 shadow-sm">
-          <img src="/logo/logo_court_vision.jpg" alt="CourtVision" className="max-h-24 w-full object-contain" />
+          <img src="/logo/logo_court_vision.svg" alt="CourtVision" className="max-h-24 w-full object-contain" />
         </div>
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold">Accesso</h1>
