@@ -57,56 +57,75 @@ function Empty({ children }: { children: string }) {
   return <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">{children}</p>;
 }
 
-function ratioPercent(value: number, total: number) {
+function ratioPercent(value: number, comparison: number) {
+  const total = value + comparison;
   if (total <= 0) return 0;
   return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
 }
 
 function GaugeCard({
   title,
-  value,
-  total,
-  valueLabel,
-  totalLabel,
+  primaryValue,
+  secondaryValue,
+  primaryLabel,
+  secondaryLabel,
   icon: Icon,
 }: {
   title: string;
-  value: number;
-  total: number;
-  valueLabel: string;
-  totalLabel: string;
+  primaryValue: number;
+  secondaryValue: number;
+  primaryLabel: string;
+  secondaryLabel: string;
   icon: typeof Users;
 }) {
-  const percent = ratioPercent(value, total);
-  const background = `conic-gradient(hsl(var(--primary)) 0deg ${percent * 1.8}deg, hsl(var(--accent)) ${percent * 1.8}deg 180deg, transparent 180deg 360deg)`;
+  const percent = ratioPercent(primaryValue, secondaryValue);
 
   return (
     <Card className="p-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">{title}</h2>
-          <p className="text-sm text-muted-foreground">{valueLabel}</p>
+          <p className="text-sm text-muted-foreground">
+            {primaryLabel} / {secondaryLabel}
+          </p>
         </div>
         <Icon className="h-5 w-5 text-primary" />
       </div>
       <div className="mx-auto w-full max-w-[260px]">
-        <div className="relative aspect-[2/1] overflow-hidden">
-          <div className="absolute inset-0 rounded-t-full" style={{ background }} />
-          <div className="absolute inset-x-[13%] bottom-0 aspect-[2/1] rounded-t-full bg-card" />
-          <div className="absolute inset-x-0 bottom-1 text-center">
+        <div className="relative aspect-[2/1]">
+          <svg className="h-full w-full overflow-visible" viewBox="0 0 220 120" role="img" aria-label={`${title}: ${percent}% ${primaryLabel.toLowerCase()}`}>
+            <path
+              d="M 20 110 A 90 90 0 0 1 200 110"
+              fill="none"
+              pathLength={100}
+              stroke="hsl(var(--accent))"
+              strokeLinecap="round"
+              strokeWidth="18"
+            />
+            <path
+              d="M 20 110 A 90 90 0 0 1 200 110"
+              fill="none"
+              pathLength={100}
+              stroke="hsl(var(--primary))"
+              strokeDasharray={`${percent} 100`}
+              strokeLinecap="round"
+              strokeWidth="18"
+            />
+          </svg>
+          <div className="absolute inset-x-0 bottom-0 text-center">
             <p className="text-3xl font-semibold">{percent}%</p>
-            <p className="text-xs text-muted-foreground">{totalLabel}</p>
+            <p className="text-xs text-muted-foreground">{primaryLabel}</p>
           </div>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div className="rounded-md border border-border p-3">
-          <p className="text-muted-foreground">{valueLabel}</p>
-          <p className="mt-1 font-semibold">{fromCents(value)}</p>
+          <p className="text-muted-foreground">{primaryLabel}</p>
+          <p className="mt-1 font-semibold">{fromCents(primaryValue)}</p>
         </div>
         <div className="rounded-md border border-border p-3">
-          <p className="text-muted-foreground">{totalLabel}</p>
-          <p className="mt-1 font-semibold">{fromCents(total)}</p>
+          <p className="text-muted-foreground">{secondaryLabel}</p>
+          <p className="mt-1 font-semibold">{fromCents(secondaryValue)}</p>
         </div>
       </div>
     </Card>
@@ -195,19 +214,19 @@ function DirectorOverview({ overview }: { overview: Extract<Overview, { role: "D
       </section>
       <section className="mb-6 grid gap-4 xl:grid-cols-2">
         <GaugeCard
-          title="Payments vs expenses"
-          value={overview.totals.paymentAmountCents}
-          total={overview.totals.expenseAmountCents}
-          valueLabel="Payments"
-          totalLabel="Expenses"
+          title="Expenses vs payments"
+          primaryValue={overview.totals.expenseAmountCents}
+          secondaryValue={overview.totals.paymentAmountCents}
+          primaryLabel="Expenses"
+          secondaryLabel="Payments"
           icon={Euro}
         />
         <GaugeCard
-          title="Received vs open"
-          value={overview.totals.receivedPaymentAmountCents}
-          total={overview.totals.receivedPaymentAmountCents + overview.totals.pendingPaymentAmountCents}
-          valueLabel="Received"
-          totalLabel="Expected"
+          title="Received vs not received"
+          primaryValue={overview.totals.receivedPaymentAmountCents}
+          secondaryValue={overview.totals.pendingPaymentAmountCents}
+          primaryLabel="Received"
+          secondaryLabel="Not received"
           icon={CreditCard}
         />
       </section>
