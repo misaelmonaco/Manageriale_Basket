@@ -20,6 +20,18 @@ export type AuthSession = {
   };
 };
 
+export type RegisterResponse = {
+  success: boolean;
+  requiresEmailVerification: boolean;
+  emailVerificationSent: boolean;
+  email: string;
+  profileAssignment?: {
+    assignedToOrganization: boolean;
+    assignmentStatus: "ASSIGNED" | "UNASSIGNED";
+    organizationSlug: string | null;
+  };
+};
+
 export type ApiPage<T> = {
   data: T[];
   total: number;

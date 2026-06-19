@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from "@nestjs/common";
 import {
   ApiBearerAuth,
@@ -22,10 +23,11 @@ import { Public } from "../../shared/auth/public.decorator";
 import { RequestUser } from "../../shared/auth/request-user.type";
 import { Roles } from "../../shared/rbac/roles.decorator";
 import { AuthService } from "./auth.service";
-import { AuthResponseDto } from "./dto/auth-response.dto";
+import { AuthResponseDto, RegisterResponseDto } from "./dto/auth-response.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { ResendVerificationDto } from "./dto/resend-verification.dto";
 import { UpdateOwnPasswordDto } from "./dto/update-own-password.dto";
 import { UpdateUserPasswordDto } from "./dto/update-user-password.dto";
 
@@ -39,7 +41,7 @@ export class AuthController {
   @ApiOperation({
     summary: "Register the first SUPER_ADMIN or a new organization director",
   })
-  @ApiCreatedResponse({ type: AuthResponseDto })
+  @ApiCreatedResponse({ type: RegisterResponseDto })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
@@ -52,6 +54,21 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: "Invalid credentials" })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto.email, dto.password);
+  }
+
+  @Public()
+  @Get("verify-email")
+  @ApiOperation({ summary: "Verify a registered email address" })
+  verifyEmail(@Query("token") token: string) {
+    return this.authService.verifyEmail(token);
+  }
+
+  @Public()
+  @Post("resend-verification")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Resend the email verification link" })
+  resendVerification(@Body() dto: ResendVerificationDto) {
+    return this.authService.resendVerification(dto.email);
   }
 
   @Public()

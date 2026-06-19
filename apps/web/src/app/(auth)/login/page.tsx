@@ -7,14 +7,16 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { login } from "@/lib/api";
+import { login, resendVerification } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
 
   function storeSession(session: Awaited<ReturnType<typeof login>>) {
     localStorage.setItem("accessToken", session.accessToken);
@@ -33,15 +35,35 @@ export default function LoginPage() {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setNeedsVerification(false);
     try {
       const session = await login(email, password);
       storeSession(session);
       router.push("/dashboard");
       router.refresh();
-    } catch {
-      setError("Email o password non corretti.");
+    } catch (loginError) {
+      const message = loginError instanceof Error ? loginError.message : "";
+      if (message.toLowerCase().includes("email not verified")) {
+        setNeedsVerification(true);
+        setError("Email non verificata. Ti abbiamo inviato un nuovo link di verifica.");
+      } else {
+        setError("Email o password non corretti.");
+      }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function resend() {
+    setResending(true);
+    setError(null);
+    try {
+      await resendVerification(email);
+      setError("Link di verifica inviato. Controlla la tua email.");
+    } catch {
+      setError("Non riesco a inviare il link di verifica.");
+    } finally {
+      setResending(false);
     }
   }
 
@@ -79,6 +101,11 @@ export default function LoginPage() {
             />
           </label>
           {error && <p className="text-sm text-primary">{error}</p>}
+          {needsVerification && (
+            <Button type="button" variant="outline" className="w-full" disabled={resending || !email} onClick={() => void resend()}>
+              {resending ? "Invio in corso" : "Reinvia email di verifica"}
+            </Button>
+          )}
           <Button className="w-full" disabled={loading}>
             <LogIn className="mr-2 h-4 w-4" />
             {loading ? "Accesso in corso" : "Accedi"}

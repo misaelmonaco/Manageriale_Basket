@@ -68,7 +68,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      await register({
+      const response = await register({
         username: form.username,
         email: form.email,
         password: form.password,
@@ -94,7 +94,12 @@ export default function RegisterPage() {
         organizationName: "",
         organizationSlug: "",
       }));
-      setSuccess("Utente creato nel database. Ora puoi accedere.");
+      const successMessage = !response.requiresEmailVerification
+        ? "Account creato. Ora puoi accedere."
+        : response.emailVerificationSent
+          ? "Account creato. Controlla la tua email e apri il link di verifica prima di accedere."
+          : "Account creato, ma l'email di verifica non e stata inviata. Controlla la configurazione Resend.";
+      setSuccess(successMessage);
     } catch (submitError) {
       setError(
         submitError instanceof Error

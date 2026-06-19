@@ -2,15 +2,18 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { ProfileAssignmentStatus, Role, User } from "@prisma/client";
+import { randomBytes } from "node:crypto";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
 import { RequestUser } from "../../shared/auth/request-user.type";
 import { TenantService } from "../../shared/tenant/tenant.service";
+import { MailService } from "../mail/mail.service";
 import { RegisterDto } from "./dto/register.dto";
 
 type JwtPayload = {
@@ -27,10 +30,12 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly tenant: TenantService,
+    private readonly mail: MailService,
   ) {}
 
   async register(dto: RegisterDto) {
     const usersCount = await this.prisma.user.count();
+    this.assertEmailVerificationReady();
 
     if (dto.role === Role.SUPER_ADMIN && usersCount > 0) {
       throw new ForbiddenException(
@@ -70,7 +75,7 @@ export class AuthService {
           role: Role.SUPER_ADMIN,
         },
       });
-      return this.issueSession(user);
+      return this.registrationResponse(user);
     }
 
     if (dto.role === Role.PLAYER || dto.role === Role.COACH) {
@@ -121,7 +126,7 @@ export class AuthService {
         return createdUser;
       });
 
-      return this.issueSession(user, {
+      return this.registrationResponse(user, {
         assignedToOrganization: Boolean(organization),
         assignmentStatus,
         organizationSlug: organization?.slug ?? null,
@@ -146,7 +151,7 @@ export class AuthService {
         },
       });
 
-      return this.issueSession(user, {
+      return this.registrationResponse(user, {
         assignedToOrganization: true,
         assignmentStatus: ProfileAssignmentStatus.UNASSIGNED,
         organizationSlug: existingDirectorOrganization.slug,
@@ -199,7 +204,7 @@ export class AuthService {
       return createdUser;
     });
 
-    return this.issueSession(user, {
+    return this.registrationResponse(user, {
       assignedToOrganization: true,
       assignmentStatus: ProfileAssignmentStatus.ASSIGNED,
       organizationSlug,
@@ -213,6 +218,12 @@ export class AuthService {
 
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) throw new UnauthorizedException("Invalid credentials.");
+    if (!user.emailVerifiedAt) {
+      await this.sendVerificationEmail(user);
+      throw new UnauthorizedException(
+        "Email not verified. We sent you a new verification email.",
+      );
+    }
 
     await this.prisma.refreshToken.updateMany({
       where: {
@@ -260,6 +271,47 @@ export class AuthService {
       where: { userId: payload.sub, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    return { success: true };
+  }
+
+  async verifyEmail(token: string) {
+    const [selector, secret] = token.split(".");
+    if (!selector || !secret) {
+      throw new ForbiddenException("Verification link is invalid or expired.");
+    }
+
+    const candidate = await this.prisma.emailVerificationToken.findUnique({
+      where: { selector },
+      include: { user: true },
+    });
+
+    if (
+      !candidate ||
+      candidate.usedAt ||
+      candidate.expiresAt <= new Date() ||
+      !(await bcrypt.compare(secret, candidate.tokenHash))
+    ) {
+      throw new ForbiddenException("Verification link is invalid or expired.");
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: candidate.userId },
+        data: { emailVerifiedAt: candidate.user.emailVerifiedAt ?? new Date() },
+      }),
+      this.prisma.emailVerificationToken.updateMany({
+        where: { userId: candidate.userId, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    return { success: true };
+  }
+
+  async resendVerification(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || user.emailVerifiedAt) return { success: true };
+    await this.sendVerificationEmail(user);
     return { success: true };
   }
 
@@ -399,6 +451,106 @@ export class AuthService {
       },
       profileAssignment,
     };
+  }
+
+  private async registrationResponse(
+    user: User,
+    profileAssignment?: {
+      assignedToOrganization: boolean;
+      assignmentStatus: ProfileAssignmentStatus;
+      organizationSlug: string | null;
+    },
+  ) {
+    const emailVerification = await this.sendVerificationEmail(user);
+    if (!emailVerification.sent && !this.strictEmailVerification()) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifiedAt: new Date() },
+      });
+    }
+
+    return {
+      success: true,
+      requiresEmailVerification:
+        emailVerification.sent || this.strictEmailVerification(),
+      emailVerificationSent: emailVerification.sent,
+      email: user.email,
+      profileAssignment,
+    };
+  }
+
+  private async sendVerificationEmail(user: User) {
+    const recentToken = await this.prisma.emailVerificationToken.findFirst({
+      where: {
+        userId: user.id,
+        usedAt: null,
+        createdAt: { gt: this.verificationCooldownDate() },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (recentToken) return { sent: true, throttled: true };
+
+    const selector = randomBytes(16).toString("hex");
+    const secret = randomBytes(32).toString("hex");
+    const token = `${selector}.${secret}`;
+    await this.prisma.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        selector,
+        tokenHash: await this.hashSecret(secret),
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+      },
+    });
+
+    const frontendUrl = this.config.get<string>(
+      "FRONTEND_URL",
+      "http://localhost:3000",
+    );
+    const verifyUrl = `${frontendUrl.replace(/\/$/, "")}/verify-email?token=${token}`;
+    const name =
+      [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
+    const safeName = this.escapeHtml(name);
+
+    return this.mail.send({
+      to: user.email,
+      subject: "Verifica la tua email",
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111">
+          <h1>Conferma il tuo indirizzo email</h1>
+          <p>Ciao ${safeName}, usa il link qui sotto per attivare il tuo account CourtVision.</p>
+          <p><a href="${verifyUrl}" style="display:inline-block;padding:10px 16px;background:#df5136;color:white;text-decoration:none;border-radius:6px">Verifica email</a></p>
+          <p>Il link scade tra 24 ore.</p>
+        </div>
+      `,
+      text: `Ciao ${name}, verifica la tua email aprendo questo link: ${verifyUrl}`,
+    });
+  }
+
+  private assertEmailVerificationReady() {
+    if (this.strictEmailVerification() && !this.mail.isConfigured()) {
+      throw new ServiceUnavailableException(
+        "Email verification is not configured.",
+      );
+    }
+  }
+
+  private strictEmailVerification() {
+    return this.config.get("NODE_ENV") === "production";
+  }
+
+  private verificationCooldownDate() {
+    const minutes = Number(
+      this.config.get("EMAIL_VERIFICATION_RESEND_COOLDOWN_MINUTES") ?? 5,
+    );
+    return new Date(Date.now() - 1000 * 60 * minutes);
+  }
+
+  private escapeHtml(value: string) {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   private async verifyRefreshToken(token: string): Promise<JwtPayload> {

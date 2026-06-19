@@ -38,3 +38,24 @@ export class AuthResponseDto {
     organizationSlug: string | null;
   };
 }
+
+export class RegisterResponseDto {
+  @ApiProperty()
+  success!: boolean;
+
+  @ApiProperty()
+  requiresEmailVerification!: boolean;
+
+  @ApiProperty()
+  emailVerificationSent!: boolean;
+
+  @ApiProperty()
+  email!: string;
+
+  @ApiProperty({ required: false, nullable: true })
+  profileAssignment?: {
+    assignedToOrganization: boolean;
+    assignmentStatus: ProfileAssignmentStatus;
+    organizationSlug: string | null;
+  };
+}

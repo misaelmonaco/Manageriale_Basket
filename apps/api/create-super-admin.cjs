@@ -18,6 +18,7 @@ async function main() {
       passwordHash,
       role: "SUPER_ADMIN",
       isActive: true,
+      emailVerifiedAt: new Date(),
     },
     create: {
       email,
@@ -27,6 +28,7 @@ async function main() {
       passwordHash,
       role: "SUPER_ADMIN",
       birthDate: new Date("2000-01-01"),
+      emailVerifiedAt: new Date(),
     },
   });
 

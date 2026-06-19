@@ -1,4 +1,4 @@
-import { AuthSession } from "@basket/contracts";
+import { AuthSession, RegisterResponse } from "@basket/contracts";
 
 const baseUrl =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
@@ -137,9 +137,20 @@ export type RegisterPayload = {
 };
 
 export function register(payload: RegisterPayload) {
-  return apiFetch<AuthSession>("/auth/register", {
+  return apiFetch<RegisterResponse>("/auth/register", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function verifyEmail(token: string) {
+  return apiFetch<{ success: boolean }>(`/auth/verify-email?token=${encodeURIComponent(token)}`);
+}
+
+export function resendVerification(email: string) {
+  return apiFetch<{ success: boolean }>("/auth/resend-verification", {
+    method: "POST",
+    body: JSON.stringify({ email }),
   });
 }
 
