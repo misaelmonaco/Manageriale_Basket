@@ -480,16 +480,6 @@ export class AuthService {
   }
 
   private async sendVerificationEmail(user: User) {
-    const recentToken = await this.prisma.emailVerificationToken.findFirst({
-      where: {
-        userId: user.id,
-        usedAt: null,
-        createdAt: { gt: this.verificationCooldownDate() },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    if (recentToken) return { sent: true, throttled: true };
-
     const selector = randomBytes(16).toString("hex");
     const secret = randomBytes(32).toString("hex");
     const token = `${selector}.${secret}`;
@@ -511,7 +501,7 @@ export class AuthService {
       [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
     const safeName = this.escapeHtml(name);
 
-    return this.mail.send({
+    const sendResult = await this.mail.send({
       to: user.email,
       subject: "Verifica la tua email",
       html: `
@@ -524,6 +514,14 @@ export class AuthService {
       `,
       text: `Ciao ${name}, verifica la tua email aprendo questo link: ${verifyUrl}`,
     });
+
+    if (!sendResult.sent) {
+      await this.prisma.emailVerificationToken.deleteMany({
+        where: { selector },
+      });
+    }
+
+    return sendResult;
   }
 
   private assertEmailVerificationReady() {

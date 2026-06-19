@@ -98,7 +98,7 @@ export default function RegisterPage() {
         ? "Account creato. Ora puoi accedere."
         : response.emailVerificationSent
           ? "Account creato. Controlla la tua email e apri il link di verifica prima di accedere."
-          : "Account creato, ma l'email di verifica non e stata inviata. Controlla la configurazione Resend.";
+          : "Account creato, ma l'email di verifica non e stata inviata. Controlla la configurazione SMTP.";
       setSuccess(successMessage);
     } catch (submitError) {
       setError(

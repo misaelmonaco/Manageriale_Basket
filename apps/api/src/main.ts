@@ -21,13 +21,27 @@ async function bootstrap() {
         .filter(Boolean),
     ].filter(Boolean),
   );
+  const isAllowedOrigin = (origin: string) => {
+    if (allowedOrigins.has(origin)) return true;
+
+    try {
+      const { hostname } = new URL(origin);
+      return (
+        hostname === "courtvisionmanager.pro" ||
+        hostname.endsWith(".courtvisionmanager.pro") ||
+        hostname.endsWith(".onrender.com")
+      );
+    } catch {
+      return false;
+    }
+  };
 
   app.setGlobalPrefix("api/v1");
   app.use(helmet());
   app.use(cookieParser());
   app.enableCors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.has(origin)) {
+      if (!origin || isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
