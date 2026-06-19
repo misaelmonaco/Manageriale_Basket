@@ -540,7 +540,9 @@ export class AuthService {
 
   private verificationCooldownDate() {
     const minutes = Number(
-      this.config.get("EMAIL_VERIFICATION_RESEND_COOLDOWN_MINUTES") ?? 5,
+      this.config.get("EMAIL_VERIFICATION_COOLDOWN_MINUTES") ??
+        this.config.get("EMAIL_VERIFICATION_RESEND_COOLDOWN_MINUTES") ??
+        5,
     );
     return new Date(Date.now() - 1000 * 60 * minutes);
   }

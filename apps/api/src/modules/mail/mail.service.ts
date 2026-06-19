@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import nodemailer from "nodemailer";
 
 type SendMailInput = {
   to: string;
@@ -16,41 +17,50 @@ export class MailService {
 
   isConfigured() {
     return Boolean(
-      this.config.get<string>("RESEND_API_KEY") &&
-      this.config.get<string>("RESEND_FROM_EMAIL"),
+      this.config.get<string>("SMTP_HOST") &&
+      this.config.get<string>("SMTP_USER") &&
+      this.config.get<string>("SMTP_PASSWORD") &&
+      this.fromAddress(),
     );
   }
 
   async send(input: SendMailInput) {
-    const apiKey = this.config.get<string>("RESEND_API_KEY");
-    const from = this.config.get<string>("RESEND_FROM_EMAIL");
-
-    if (!apiKey || !from) {
-      this.logger.warn("Resend is not configured. Email was not sent.");
+    if (!this.isConfigured()) {
+      this.logger.warn("SMTP is not configured. Email was not sent.");
       return { sent: false };
     }
 
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+    const port = Number(this.config.get<string>("SMTP_PORT") ?? 465);
+    const secure = this.config.get<string>("SMTP_SECURE") !== "false";
+    const transporter = nodemailer.createTransport({
+      host: this.config.getOrThrow<string>("SMTP_HOST"),
+      port,
+      secure,
+      auth: {
+        user: this.config.getOrThrow<string>("SMTP_USER"),
+        pass: this.config.getOrThrow<string>("SMTP_PASSWORD"),
       },
-      body: JSON.stringify({
-        from,
-        to: [input.to],
+    });
+
+    try {
+      await transporter.sendMail({
+        from: this.fromAddress(),
+        to: input.to,
         subject: input.subject,
         html: input.html,
         text: input.text,
-      }),
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      this.logger.error(`Resend send failed: ${body}`);
+      });
+      return { sent: true };
+    } catch (error) {
+      this.logger.error("SMTP send failed", error);
       return { sent: false };
     }
+  }
 
-    return { sent: true };
+  private fromAddress() {
+    return (
+      this.config.get<string>("SMTP_FROM") ??
+      this.config.get<string>("SMTP_USER")
+    );
   }
 }
