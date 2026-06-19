@@ -9,13 +9,33 @@ import { AppModule } from "./app.module";
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+  const frontendUrl = config.get<string>("FRONTEND_URL");
+  const allowedOrigins = new Set(
+    [
+      frontendUrl,
+      frontendUrl?.replace("://www.", "://"),
+      frontendUrl?.replace("://", "://www."),
+      ...(config.get<string>("CORS_ORIGINS") ?? "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+    ].filter(Boolean),
+  );
 
   app.setGlobalPrefix("api/v1");
   app.use(helmet());
   app.use(cookieParser());
   app.enableCors({
-    origin: config.get<string>("FRONTEND_URL"),
-    credentials: true
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Origin ${origin} is not allowed by CORS`));
+    },
+    credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-organization-id", "x-organization-slug"],
   });
   app.useGlobalPipes(
     new ValidationPipe({
