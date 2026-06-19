@@ -3,12 +3,12 @@
 import { CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { verifyEmail } from "@/lib/api";
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const params = useSearchParams();
   const token = params.get("token") ?? "";
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
@@ -54,5 +54,21 @@ export default function VerifyEmailPage() {
         </Button>
       </Card>
     </main>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-24">
+          <Card className="w-full max-w-md p-6 text-center">
+            <p className="text-sm text-muted-foreground">Verifica email in corso...</p>
+          </Card>
+        </main>
+      }
+    >
+      <VerifyEmailContent />
+    </Suspense>
   );
 }
