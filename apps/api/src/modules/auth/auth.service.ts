@@ -219,10 +219,21 @@ export class AuthService {
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) throw new UnauthorizedException("Invalid credentials.");
     if (!user.emailVerifiedAt) {
-      await this.sendVerificationEmail(user);
-      throw new UnauthorizedException(
-        "Email not verified. We sent you a new verification email.",
-      );
+      const verification = await this.sendVerificationEmail(user);
+      if (!verification.sent && !this.strictEmailVerification()) {
+        // Email delivery is unavailable and verification is not enforced:
+        // auto-verify so the user is not locked out of their account.
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { emailVerifiedAt: new Date() },
+        });
+      } else {
+        throw new UnauthorizedException(
+          verification.sent
+            ? "Email not verified. We sent you a new verification email."
+            : "Email not verified and the verification email could not be sent. Please try again later.",
+        );
+      }
     }
 
     await this.prisma.refreshToken.updateMany({
@@ -533,6 +544,14 @@ export class AuthService {
   }
 
   private strictEmailVerification() {
+    // Allow overriding the strict behaviour via env var so that a broken or
+    // unreachable SMTP server does not block profile creation in production.
+    // EMAIL_VERIFICATION_REQUIRED=true  -> always require verification
+    // EMAIL_VERIFICATION_REQUIRED=false -> never block registration/login
+    // (unset) -> default to strict only in production
+    const override = this.config.get<string>("EMAIL_VERIFICATION_REQUIRED");
+    if (override === "true") return true;
+    if (override === "false") return false;
     return this.config.get("NODE_ENV") === "production";
   }
 

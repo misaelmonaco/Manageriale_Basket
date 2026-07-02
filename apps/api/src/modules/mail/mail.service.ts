@@ -31,7 +31,13 @@ export class MailService {
     }
 
     const port = Number(this.config.get<string>("SMTP_PORT") ?? 465);
-    const secure = this.config.get<string>("SMTP_SECURE") !== "false";
+    // If SMTP_SECURE is not set, infer it from the port:
+    // 465 = implicit TLS (secure: true), 587/25 = STARTTLS (secure: false).
+    const secureRaw = this.config.get<string>("SMTP_SECURE");
+    const secure =
+      secureRaw === undefined || secureRaw === ""
+        ? port === 465
+        : secureRaw !== "false";
     const transporter = nodemailer.createTransport({
       host: this.config.getOrThrow<string>("SMTP_HOST"),
       port,
@@ -40,6 +46,11 @@ export class MailService {
         user: this.config.getOrThrow<string>("SMTP_USER"),
         pass: this.config.getOrThrow<string>("SMTP_PASSWORD"),
       },
+      // Fail fast instead of hanging the HTTP request if the SMTP host
+      // is unreachable (e.g. blocked port on the hosting provider).
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
     });
 
     try {
