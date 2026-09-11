@@ -9,9 +9,23 @@ export type SendMailInput = {
   text?: string;
 };
 
-export type SendMailResult = { sent: boolean };
+/** `error` carries the provider's own reason, for diagnostics endpoints and logs. */
+export type SendMailResult = { sent: boolean; error?: string };
 
 type MailProvider = "resend" | "smtp" | "none";
+
+/**
+ * Node hides the useful part of a network failure in `code`/`errno`, so both
+ * are surfaced: ETIMEDOUT on an SMTP port almost always means the host blocks
+ * outbound SMTP, which no amount of configuration will fix.
+ */
+function describeError(error: unknown) {
+  if (error instanceof Error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code ? `${code}: ${error.message}` : error.message;
+  }
+  return String(error);
+}
 
 @Injectable()
 export class MailService {
@@ -46,8 +60,47 @@ export class MailService {
     if (provider === "resend") return this.sendWithResend(input);
     if (provider === "smtp") return this.sendWithSmtp(input);
 
-    this.logger.warn(`No mail provider is configured. Email "${input.subject}" was not sent.`);
-    return { sent: false };
+    const reason = "No mail provider is configured.";
+    this.logger.warn(`${reason} Email "${input.subject}" was not sent.`);
+    return { sent: false, error: reason };
+  }
+
+  /**
+   * Opens a connection (SMTP) or validates the credentials without sending an
+   * email, so an operator can tell a broken transport from a rejected message.
+   */
+  async verifyTransport(): Promise<{ ok: boolean; provider: MailProvider; error?: string }> {
+    const provider = this.provider();
+    if (provider === "none") {
+      return { ok: false, provider, error: "No mail provider is configured." };
+    }
+
+    if (provider === "resend") {
+      // Resend has no dedicated ping, so the key is checked against a cheap
+      // authenticated read.
+      try {
+        const response = await fetch("https://api.resend.com/domains", {
+          headers: { Authorization: `Bearer ${this.config.getOrThrow<string>("RESEND_API_KEY")}` },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!response.ok) {
+          return { ok: false, provider, error: `Resend returned ${response.status}: ${await response.text()}` };
+        }
+        return { ok: true, provider };
+      } catch (error) {
+        return { ok: false, provider, error: describeError(error) };
+      }
+    }
+
+    const transporter = this.smtpTransporter();
+    try {
+      await transporter.verify();
+      return { ok: true, provider };
+    } catch (error) {
+      return { ok: false, provider, error: describeError(error) };
+    } finally {
+      transporter.close();
+    }
   }
 
   private async sendWithResend(input: SendMailInput): Promise<SendMailResult> {
@@ -74,27 +127,28 @@ export class MailService {
 
       if (!response.ok) {
         // The body carries the provider's reason (unverified domain, invalid
-        // key, rate limit); it is worth logging verbatim.
-        this.logger.error(`Resend rejected the email (${response.status}): ${await response.text()}`);
-        return { sent: false };
+        // key, rate limit); it is worth reporting verbatim.
+        const reason = `Resend rejected the email (${response.status}): ${await response.text()}`;
+        this.logger.error(reason);
+        return { sent: false, error: reason };
       }
 
       return { sent: true };
     } catch (error) {
       this.logger.error("Resend request failed", error);
-      return { sent: false };
+      return { sent: false, error: describeError(error) };
     } finally {
       clearTimeout(timeout);
     }
   }
 
-  private async sendWithSmtp(input: SendMailInput): Promise<SendMailResult> {
+  private smtpTransporter() {
     const port = Number(this.config.get<string>("SMTP_PORT") ?? 465);
     // If SMTP_SECURE is not set, infer it from the port:
     // 465 = implicit TLS (secure: true), 587/25 = STARTTLS (secure: false).
     const secureRaw = this.config.get<string>("SMTP_SECURE");
     const secure = secureRaw === undefined || secureRaw === "" ? port === 465 : secureRaw !== "false";
-    const transporter = nodemailer.createTransport({
+    return nodemailer.createTransport({
       host: this.config.getOrThrow<string>("SMTP_HOST"),
       port,
       secure,
@@ -108,6 +162,10 @@ export class MailService {
       greetingTimeout: 10_000,
       socketTimeout: 15_000,
     });
+  }
+
+  private async sendWithSmtp(input: SendMailInput): Promise<SendMailResult> {
+    const transporter = this.smtpTransporter();
 
     try {
       await transporter.sendMail({
@@ -120,7 +178,7 @@ export class MailService {
       return { sent: true };
     } catch (error) {
       this.logger.error("SMTP send failed", error);
-      return { sent: false };
+      return { sent: false, error: describeError(error) };
     } finally {
       transporter.close();
     }

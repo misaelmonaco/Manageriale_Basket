@@ -107,7 +107,11 @@ POST /api/v1/documents
 
 `MailService` picks its transport from configuration: an HTTP provider when `RESEND_API_KEY` is set, SMTP otherwise, forced either way by `MAIL_PROVIDER`. HTTP is the default because most PaaS free tiers block outbound SMTP ports (Render blocks 25/465/587 on free instances), where nodemailer can only time out. Bodies live in `mail.templates.ts` so every message shares one layout.
 
-Flows: email verification, password reset, organization/team assignment, and payment reminders. Delivery failures are logged and never roll back the operation that triggered them.
+Flows: email verification, password reset, organization/team assignment, and payment reminders. Delivery failures are logged and never roll back the operation that triggered them, and every failure carries the provider's own reason rather than a bare boolean.
+
+Two `SUPER_ADMIN` endpoints diagnose delivery without registering a throwaway account: `GET /health/mail` opens the SMTP connection (or validates the API key) and reports the raw error, and `POST /health/mail/test` sends a real message to a given address. An `ETIMEDOUT` on an SMTP port means the host blocks outbound SMTP, which configuration cannot fix.
+
+`isEmailVerificationRequired` is shared between the auth flow and `/health/ready`, so the reported state can never drift from the enforced one. When it is false and delivery fails, accounts are verified automatically to avoid locking users out — `/health/ready` reports this explicitly because it is easy to leave switched on while debugging.
 
 Payment reminders run through `POST /payments/reminders/run`, authenticated with `CRON_SECRET` via the `x-cron-secret` header and driven by an external scheduler, so no in-process scheduler is needed. `Payment.remindedAt` stops a daily schedule from mailing the same families every day.
 
@@ -122,7 +126,7 @@ Payment reminders run through `POST /payments/reminders/run`, authenticated with
 
 ## Operations
 
-- `GET /api/v1/health` is a liveness probe; `GET /api/v1/health/ready` also pings the database and reports the active mail transport, answering 503 when Postgres is unreachable
+- `GET /api/v1/health` is a liveness probe; `GET /api/v1/health/ready` also pings the database and reports the mail transport, the effective `NODE_ENV` and whether email verification is enforced, answering 503 when Postgres is unreachable
 - `AllExceptionsFilter` is the single error exit point: it maps Prisma failures to HTTP codes (P2002 conflict, P2003 bad request, P2025 not found), logs 5xx with a stack, and never returns an internal message
 - `RequestLoggingInterceptor` logs one line per request (method, path, status, duration), skipping health probes
 - The first administrator is bootstrapped by `pnpm --filter @basket/api seed:super-admin`, which is idempotent: it skips once a `SUPER_ADMIN` exists and never overwrites a password unless `SUPER_ADMIN_RESET=true`, so it can stay in the deploy pipeline

@@ -13,6 +13,7 @@ import { randomBytes } from "node:crypto";
 import * as bcrypt from "bcrypt";
 import { PrismaService } from "../../prisma/prisma.service";
 import { RequestUser } from "../../shared/auth/request-user.type";
+import { isEmailVerificationRequired } from "../../shared/config/email-verification";
 import { TenantService } from "../../shared/tenant/tenant.service";
 import { MailService } from "../mail/mail.service";
 import {
@@ -654,15 +655,7 @@ export class AuthService {
   }
 
   private strictEmailVerification() {
-    // Allow overriding the strict behaviour via env var so that a broken or
-    // unreachable SMTP server does not block profile creation in production.
-    // EMAIL_VERIFICATION_REQUIRED=true  -> always require verification
-    // EMAIL_VERIFICATION_REQUIRED=false -> never block registration/login
-    // (unset) -> default to strict only in production
-    const override = this.config.get<string>("EMAIL_VERIFICATION_REQUIRED");
-    if (override === "true") return true;
-    if (override === "false") return false;
-    return this.config.get("NODE_ENV") === "production";
+    return isEmailVerificationRequired(this.config);
   }
 
   private verificationCooldownDate() {
