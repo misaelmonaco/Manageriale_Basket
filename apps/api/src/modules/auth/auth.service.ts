@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -14,6 +15,10 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { RequestUser } from "../../shared/auth/request-user.type";
 import { TenantService } from "../../shared/tenant/tenant.service";
 import { MailService } from "../mail/mail.service";
+import {
+  passwordResetTemplate,
+  verifyEmailTemplate,
+} from "../mail/mail.templates";
 import { RegisterDto } from "./dto/register.dto";
 
 type JwtPayload = {
@@ -25,6 +30,8 @@ type JwtPayload = {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -219,19 +226,29 @@ export class AuthService {
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) throw new UnauthorizedException("Invalid credentials.");
     if (!user.emailVerifiedAt) {
-      const verification = await this.sendVerificationEmail(user);
+      // A recent verification email is still valid: resending on every login
+      // attempt would let anyone flood the address with mail.
+      const throttled = await this.isWithinResendCooldown(user.id);
+      const verification = throttled
+        ? { sent: true }
+        : await this.sendVerificationEmail(user);
       if (!verification.sent && !this.strictEmailVerification()) {
         // Email delivery is unavailable and verification is not enforced:
         // auto-verify so the user is not locked out of their account.
+        this.logger.warn(
+          `Auto-verifying user ${user.id} at login: the verification email could not be sent and EMAIL_VERIFICATION_REQUIRED is not enabled.`,
+        );
         await this.prisma.user.update({
           where: { id: user.id },
           data: { emailVerifiedAt: new Date() },
         });
       } else {
         throw new UnauthorizedException(
-          verification.sent
-            ? "Email not verified. We sent you a new verification email."
-            : "Email not verified and the verification email could not be sent. Please try again later.",
+          !verification.sent
+            ? "Email not verified and the verification email could not be sent. Please try again later."
+            : throttled
+              ? "Email not verified. Check the verification email we already sent you."
+              : "Email not verified. We sent you a new verification email.",
         );
       }
     }
@@ -321,9 +338,116 @@ export class AuthService {
 
   async resendVerification(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
+    // Always answer with a success envelope so the endpoint cannot be used to
+    // enumerate registered email addresses.
     if (!user || user.emailVerifiedAt) return { success: true };
+    if (await this.isWithinResendCooldown(user.id)) return { success: true };
     await this.sendVerificationEmail(user);
     return { success: true };
+  }
+
+  /**
+   * Always resolves to a success envelope: a different answer for unknown or
+   * already-verified addresses would turn this into an account oracle.
+   */
+  async requestPasswordReset(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || !user.isActive) return { success: true };
+
+    const recent = await this.prisma.passwordResetToken.count({
+      where: { userId: user.id, createdAt: { gt: this.verificationCooldownDate() } },
+    });
+    if (recent > 0) return { success: true };
+
+    const selector = randomBytes(16).toString("hex");
+    const secret = randomBytes(32).toString("hex");
+    const expiryMinutes = this.passwordResetExpiryMinutes();
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        selector,
+        tokenHash: await this.hashSecret(secret),
+        expiresAt: new Date(Date.now() + 1000 * 60 * expiryMinutes),
+      },
+    });
+
+    const resetUrl = this.frontendLink(`/reset-password?token=${selector}.${secret}`);
+    const result = await this.mail.send({
+      to: user.email,
+      ...passwordResetTemplate(this.displayName(user), resetUrl, expiryMinutes),
+    });
+
+    if (!result.sent) {
+      // Never leave a usable token behind for an email that was not delivered.
+      await this.prisma.passwordResetToken.deleteMany({ where: { selector } });
+      this.logger.error(`Password reset email for user ${user.id} could not be sent.`);
+    }
+
+    return { success: true };
+  }
+
+  async resetPassword(token: string, password: string) {
+    const [selector, secret] = token.split(".");
+    if (!selector || !secret) {
+      throw new ForbiddenException("Reset link is invalid or expired.");
+    }
+
+    const candidate = await this.prisma.passwordResetToken.findUnique({
+      where: { selector },
+      include: { user: true },
+    });
+
+    if (
+      !candidate ||
+      candidate.usedAt ||
+      candidate.expiresAt <= new Date() ||
+      !candidate.user.isActive ||
+      !(await bcrypt.compare(secret, candidate.tokenHash))
+    ) {
+      throw new ForbiddenException("Reset link is invalid or expired.");
+    }
+
+    const passwordHash = await this.hashSecret(password);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: candidate.userId },
+        // Completing a reset proves control of the mailbox, so an account that
+        // was still pending verification can be confirmed here too.
+        data: { passwordHash, emailVerifiedAt: candidate.user.emailVerifiedAt ?? new Date() },
+      }),
+      // Burn every outstanding reset token and sign existing sessions out.
+      this.prisma.passwordResetToken.updateMany({
+        where: { userId: candidate.userId, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId: candidate.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    return { success: true };
+  }
+
+  private passwordResetExpiryMinutes() {
+    return Number(this.config.get("PASSWORD_RESET_EXPIRY_MINUTES") ?? 60);
+  }
+
+  private displayName(user: Pick<User, "firstName" | "lastName" | "email">) {
+    return [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
+  }
+
+  private frontendLink(path: string) {
+    const frontendUrl = this.config.get<string>("FRONTEND_URL", "http://localhost:3000");
+    return `${frontendUrl.replace(/\/$/, "")}${path}`;
+  }
+
+  private async isWithinResendCooldown(userId: string) {
+    const recent = await this.prisma.emailVerificationToken.count({
+      where: { userId, createdAt: { gt: this.verificationCooldownDate() } },
+    });
+    return recent > 0;
   }
 
   async me(userId: string) {
@@ -474,6 +598,9 @@ export class AuthService {
   ) {
     const emailVerification = await this.sendVerificationEmail(user);
     if (!emailVerification.sent && !this.strictEmailVerification()) {
+      this.logger.warn(
+        `Auto-verifying user ${user.id} at registration: the verification email could not be sent and EMAIL_VERIFICATION_REQUIRED is not enabled.`,
+      );
       await this.prisma.user.update({
         where: { id: user.id },
         data: { emailVerifiedAt: new Date() },
@@ -503,27 +630,10 @@ export class AuthService {
       },
     });
 
-    const frontendUrl = this.config.get<string>(
-      "FRONTEND_URL",
-      "http://localhost:3000",
-    );
-    const verifyUrl = `${frontendUrl.replace(/\/$/, "")}/verify-email?token=${token}`;
-    const name =
-      [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
-    const safeName = this.escapeHtml(name);
-
+    const verifyUrl = this.frontendLink(`/verify-email?token=${token}`);
     const sendResult = await this.mail.send({
       to: user.email,
-      subject: "Verifica la tua email",
-      html: `
-        <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111">
-          <h1>Conferma il tuo indirizzo email</h1>
-          <p>Ciao ${safeName}, usa il link qui sotto per attivare il tuo account CourtVision.</p>
-          <p><a href="${verifyUrl}" style="display:inline-block;padding:10px 16px;background:#df5136;color:white;text-decoration:none;border-radius:6px">Verifica email</a></p>
-          <p>Il link scade tra 24 ore.</p>
-        </div>
-      `,
-      text: `Ciao ${name}, verifica la tua email aprendo questo link: ${verifyUrl}`,
+      ...verifyEmailTemplate(this.displayName(user), verifyUrl),
     });
 
     if (!sendResult.sent) {
@@ -562,14 +672,6 @@ export class AuthService {
         5,
     );
     return new Date(Date.now() - 1000 * 60 * minutes);
-  }
-
-  private escapeHtml(value: string) {
-    return value
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
   }
 
   private async verifyRefreshToken(token: string): Promise<JwtPayload> {

@@ -7,17 +7,6 @@ import { getTenantId, getTenantSlug } from "./tenant-context";
 export class TenantService {
   constructor(private readonly prisma: PrismaService) {}
 
-  resolveForUser(user: RequestUser): string {
-    if (user.role === "SUPER_ADMIN") {
-      const tenantId = getTenantId();
-      if (!tenantId) throw new ForbiddenException("SUPER_ADMIN requests must include x-organization-id.");
-      return tenantId;
-    }
-
-    if (!user.organizationId) throw new ForbiddenException("User is not attached to an organization.");
-    return user.organizationId;
-  }
-
   async resolveForUserOrSlug(user: RequestUser, organizationSlug?: string): Promise<string> {
     if (user.role !== "SUPER_ADMIN") {
       if (!user.organizationId) throw new ForbiddenException("User is not attached to an organization.");
@@ -37,7 +26,11 @@ export class TenantService {
     }
 
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tenantIdOrSlug)) {
-      return tenantIdOrSlug;
+      // Confirm the tenant exists before it is used as a query filter: the id
+      // comes straight from a client-controlled header.
+      const byId = await this.prisma.organization.findUnique({ where: { id: tenantIdOrSlug }, select: { id: true } });
+      if (!byId) throw new ForbiddenException("Organization was not found.");
+      return byId.id;
     }
 
     const organization = await this.prisma.organization.findUnique({ where: { slug: tenantIdOrSlug } });

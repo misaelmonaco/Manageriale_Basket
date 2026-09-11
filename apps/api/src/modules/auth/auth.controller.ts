@@ -22,12 +22,15 @@ import { CurrentUser } from "../../shared/auth/current-user.decorator";
 import { Public } from "../../shared/auth/public.decorator";
 import { RequestUser } from "../../shared/auth/request-user.type";
 import { Roles } from "../../shared/rbac/roles.decorator";
+import { RateLimit } from "../../shared/throttling/rate-limit.decorator";
 import { AuthService } from "./auth.service";
 import { AuthResponseDto, RegisterResponseDto } from "./dto/auth-response.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { RequestPasswordResetDto } from "./dto/request-password-reset.dto";
 import { ResendVerificationDto } from "./dto/resend-verification.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { UpdateOwnPasswordDto } from "./dto/update-own-password.dto";
 import { UpdateUserPasswordDto } from "./dto/update-user-password.dto";
 
@@ -37,6 +40,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @RateLimit({ limit: 5, windowSeconds: 3600 })
   @Post("register")
   @ApiOperation({
     summary: "Register the first SUPER_ADMIN or a new organization director",
@@ -47,6 +51,7 @@ export class AuthController {
   }
 
   @Public()
+  @RateLimit({ limit: 10, windowSeconds: 300, perEmail: true })
   @Post("login")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Authenticate with email and password" })
@@ -57,6 +62,7 @@ export class AuthController {
   }
 
   @Public()
+  @RateLimit({ limit: 20, windowSeconds: 300 })
   @Get("verify-email")
   @ApiOperation({ summary: "Verify a registered email address" })
   verifyEmail(@Query("token") token: string) {
@@ -64,6 +70,7 @@ export class AuthController {
   }
 
   @Public()
+  @RateLimit({ limit: 3, windowSeconds: 900, perEmail: true })
   @Post("resend-verification")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Resend the email verification link" })
@@ -72,6 +79,27 @@ export class AuthController {
   }
 
   @Public()
+  @RateLimit({ limit: 3, windowSeconds: 900, perEmail: true })
+  @Post("forgot-password")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Send a password reset link" })
+  @ApiOkResponse({ schema: { example: { success: true } } })
+  forgotPassword(@Body() dto: RequestPasswordResetDto) {
+    return this.authService.requestPasswordReset(dto.email);
+  }
+
+  @Public()
+  @RateLimit({ limit: 10, windowSeconds: 900 })
+  @Post("reset-password")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Set a new password from a reset link" })
+  @ApiOkResponse({ schema: { example: { success: true } } })
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token, dto.password);
+  }
+
+  @Public()
+  @RateLimit({ limit: 30, windowSeconds: 300 })
   @Post("refresh")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -100,6 +128,7 @@ export class AuthController {
     return this.authService.me(user.sub);
   }
 
+  @RateLimit({ limit: 5, windowSeconds: 900 })
   @Patch("me/password")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Update the current user password" })

@@ -10,7 +10,7 @@ export class ExpensesService {
   constructor(private readonly prisma: PrismaService, private readonly tenant: TenantService) {}
 
   async findAll(user: RequestUser, query: PageQueryDto) {
-    const organizationId = this.tenant.resolveForUser(user);
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
     const [data, total] = await this.prisma.$transaction([
       this.prisma.expense.findMany({ where: { organizationId }, orderBy: { spentAt: "desc" }, skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
       this.prisma.expense.count({ where: { organizationId } })
@@ -18,12 +18,13 @@ export class ExpensesService {
     return { data, total, page: query.page, pageSize: query.pageSize };
   }
 
-  create(user: RequestUser, dto: CreateExpenseDto) {
-    return this.prisma.expense.create({ data: { ...dto, organizationId: this.tenant.resolveForUser(user) } });
+  async create(user: RequestUser, dto: CreateExpenseDto) {
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
+    return this.prisma.expense.create({ data: { ...dto, organizationId } });
   }
 
-  remove(user: RequestUser, id: string) {
-    const organizationId = this.tenant.resolveForUser(user);
+  async remove(user: RequestUser, id: string) {
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
     return this.prisma.expense.delete({ where: { id, organizationId } });
   }
 }

@@ -113,6 +113,9 @@ export default function LoginPage() {
         </form>
         <div className="mt-4 grid gap-2">
           <Button asChild variant="ghost" className="w-full">
+            <Link href="/forgot-password">Password dimenticata?</Link>
+          </Button>
+          <Button asChild variant="ghost" className="w-full">
             <Link href="/register">Crea un nuovo account</Link>
           </Button>
           <Button asChild variant="ghost" className="w-full">

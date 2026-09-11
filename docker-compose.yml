@@ -24,8 +24,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    command: sh -c "pnpm exec prisma migrate deploy && node dist/main.js"
+    # Real secrets, not the committed example: the API refuses to boot with
+    # placeholder JWT secrets. Copy apps/api/.env.example to apps/api/.env first.
     env_file:
-      - apps/api/.env.example
+      - apps/api/.env
     ports:
       - "4000:4000"
 
@@ -36,7 +39,7 @@ services:
     depends_on:
       - api
     env_file:
-      - apps/web/.env.example
+      - apps/web/.env.local
     ports:
       - "3000:3000"
 

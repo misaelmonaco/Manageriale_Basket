@@ -1,17 +1,48 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { ProfileAssignmentStatus, Role } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { RequestUser } from "../../shared/auth/request-user.type";
+import { MailService } from "../mail/mail.service";
+import { assignmentTemplate } from "../mail/mail.templates";
 import { AssignOrganizationDto } from "./dto/assign-organization.dto";
 import { AssignTeamDto } from "./dto/assign-team.dto";
 import { AssignableProfileType } from "./dto/profile-type.dto";
 import { UnassignedRepository } from "./unassigned.repository";
 
+type AssignmentAccount = {
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+};
+
+type AssignmentResult = {
+  organization?: { name: string } | null;
+  user?: AssignmentAccount | null;
+  email?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  team?: { name: string } | null;
+  teams?: { team: { name: string } }[];
+  directorTeams?: { team: { name: string } }[];
+};
+
+type AssignmentRecipient = {
+  email: string;
+  name: string;
+  organizationName: string;
+  teamName: string | null;
+};
+
 @Injectable()
 export class UnassignedService {
+  private readonly logger = new Logger(UnassignedService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly repository: UnassignedRepository,
+    private readonly mail: MailService,
+    private readonly config: ConfigService,
   ) {}
 
   async findAll(user: RequestUser) {
@@ -33,12 +64,22 @@ export class UnassignedService {
 
   async assignOrganization(user: RequestUser, profileId: string, dto: AssignOrganizationDto) {
     const organizationId = await this.targetOrganizationId(user, dto.organizationId);
+    const assigned = await this.runOrganizationAssignment(user, profileId, organizationId, dto.profileType);
+    await this.notifyAssignment(assigned);
+    return assigned;
+  }
 
-    if (dto.profileType === AssignableProfileType.PLAYER) {
+  private runOrganizationAssignment(
+    user: RequestUser,
+    profileId: string,
+    organizationId: string,
+    profileType: AssignableProfileType,
+  ) {
+    if (profileType === AssignableProfileType.PLAYER) {
       return this.assignPlayerOrganization(user, profileId, organizationId);
     }
 
-    if (dto.profileType === AssignableProfileType.COACH) {
+    if (profileType === AssignableProfileType.COACH) {
       return this.assignCoachOrganization(user, profileId, organizationId);
     }
 
@@ -54,15 +95,71 @@ export class UnassignedService {
       throw new ForbiddenException("Team does not belong to the target organization.");
     }
 
-    if (dto.profileType === AssignableProfileType.PLAYER) {
-      return this.assignPlayerTeam(user, profileId, organizationId, team.id);
+    const assigned = await this.runTeamAssignment(user, profileId, organizationId, team.id, dto.profileType);
+    await this.notifyAssignment(assigned);
+    return assigned;
+  }
+
+  private runTeamAssignment(
+    user: RequestUser,
+    profileId: string,
+    organizationId: string,
+    teamId: string,
+    profileType: AssignableProfileType,
+  ) {
+    if (profileType === AssignableProfileType.PLAYER) {
+      return this.assignPlayerTeam(user, profileId, organizationId, teamId);
     }
 
-    if (dto.profileType === AssignableProfileType.COACH) {
-      return this.assignCoachTeam(user, profileId, organizationId, team.id);
+    if (profileType === AssignableProfileType.COACH) {
+      return this.assignCoachTeam(user, profileId, organizationId, teamId);
     }
 
-    return this.assignDirectorTeam(user, profileId, organizationId, team.id);
+    return this.assignDirectorTeam(user, profileId, organizationId, teamId);
+  }
+
+  /**
+   * The three assignment paths return different shapes: a Player and a Coach
+   * carry a nested `user`, while a Director *is* the user record. Both team
+   * relations are optional because an organization-only assignment leaves the
+   * profile without a team.
+   */
+  private assignmentRecipient(assigned: AssignmentResult): AssignmentRecipient | null {
+    const account = assigned.user ?? assigned;
+    const email = account.email;
+    const organizationName = assigned.organization?.name;
+    if (!email || !organizationName) return null;
+
+    return {
+      email,
+      name: [account.firstName, account.lastName].filter(Boolean).join(" ") || email,
+      organizationName,
+      teamName: this.assignedTeamName(assigned),
+    };
+  }
+
+  private assignedTeamName(assigned: AssignmentResult) {
+    return assigned.team?.name ?? assigned.teams?.[0]?.team.name ?? assigned.directorTeams?.[0]?.team.name ?? null;
+  }
+
+  /** Email delivery must never roll back an assignment that already succeeded. */
+  private async notifyAssignment(assigned: AssignmentResult) {
+    const recipient = this.assignmentRecipient(assigned);
+    if (!recipient) return;
+
+    const loginUrl = `${this.config.get<string>("FRONTEND_URL", "http://localhost:3000").replace(/\/$/, "")}/login`;
+
+    try {
+      const result = await this.mail.send({
+        to: recipient.email,
+        ...assignmentTemplate(recipient.name, recipient.organizationName, recipient.teamName, loginUrl),
+      });
+      if (!result.sent) {
+        this.logger.warn(`Assignment email to ${recipient.email} was not delivered.`);
+      }
+    } catch (error) {
+      this.logger.error(`Assignment email to ${recipient.email} failed.`, error);
+    }
   }
 
   private directorOrganizationId(user: RequestUser) {

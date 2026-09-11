@@ -7,6 +7,8 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\"",
     "db:migrate": "pnpm --filter @basket/api prisma:migrate",
     "db:generate": "pnpm --filter @basket/api prisma:generate"
