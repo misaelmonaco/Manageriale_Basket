@@ -7,6 +7,7 @@ import { RequestUser } from "../../shared/auth/request-user.type";
 import { PageQueryDto } from "../../shared/pagination/page-query.dto";
 import { TenantService } from "../../shared/tenant/tenant.service";
 import { CreatePlayerDto } from "./dto/create-player.dto";
+import { UpdatePlayerDto } from "./dto/update-player.dto";
 import { PlayersRepository } from "./players.repository";
 
 @Injectable()
@@ -41,6 +42,16 @@ export class PlayersService {
     void lastName;
     await this.assertTenantRelations(organizationId, { ...playerDto, userId });
     return this.repository.create({ ...playerDto, userId, organizationId });
+  }
+
+  async update(user: RequestUser, id: string, dto: UpdatePlayerDto) {
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
+    if (dto.teamId) {
+      const teams = await this.repository.countTenantTeams(organizationId, [dto.teamId]);
+      if (teams !== 1) throw new ForbiddenException("Team does not belong to this organization.");
+    }
+
+    return this.repository.update(id, organizationId, dto);
   }
 
   async remove(user: RequestUser, id: string) {

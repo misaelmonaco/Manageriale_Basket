@@ -4,6 +4,7 @@ import { RequestUser } from "../../shared/auth/request-user.type";
 import { PageQueryDto } from "../../shared/pagination/page-query.dto";
 import { TenantService } from "../../shared/tenant/tenant.service";
 import { CreateExpenseDto } from "./dto/create-expense.dto";
+import { UpdateExpenseDto } from "./dto/update-expense.dto";
 
 @Injectable()
 export class ExpensesService {
@@ -21,6 +22,11 @@ export class ExpensesService {
   async create(user: RequestUser, dto: CreateExpenseDto) {
     const organizationId = await this.tenant.resolveForUserOrSlug(user);
     return this.prisma.expense.create({ data: { ...dto, organizationId } });
+  }
+
+  async update(user: RequestUser, id: string, dto: UpdateExpenseDto) {
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
+    return this.prisma.expense.update({ where: { id, organizationId }, data: dto });
   }
 
   async remove(user: RequestUser, id: string) {

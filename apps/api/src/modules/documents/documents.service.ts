@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { DocumentAudience, Prisma, Role } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { RequestUser } from "../../shared/auth/request-user.type";
@@ -25,6 +25,26 @@ export class DocumentsService {
       data: { ...dto, audience, uploadedById: user.sub, organizationId },
       include: { uploadedBy: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } }
     });
+  }
+
+  /**
+   * Directors clean up anything in their organization; everyone else may only
+   * remove what they uploaded themselves.
+   */
+  async remove(user: RequestUser, id: string) {
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
+    const document = await this.prisma.document.findFirst({
+      where: { id, organizationId },
+      select: { id: true, uploadedById: true },
+    });
+    if (!document) throw new NotFoundException("Document not found.");
+
+    const isManager = user.role === Role.SUPER_ADMIN || user.role === Role.DIRECTOR;
+    if (!isManager && document.uploadedById !== user.sub) {
+      throw new ForbiddenException("You can only delete documents you uploaded.");
+    }
+
+    return this.prisma.document.delete({ where: { id: document.id } });
   }
 
   private resolveAudience(user: RequestUser, audience?: DocumentAudience) {

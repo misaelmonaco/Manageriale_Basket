@@ -44,6 +44,14 @@ export class TeamsRepository {
     return this.prisma.team.create({ data });
   }
 
+  update(id: string, organizationId: string, data: Prisma.TeamUpdateInput) {
+    return this.prisma.team.update({
+      where: { id, organizationId },
+      data,
+      include: { _count: { select: { players: true, coaches: true, directors: true } } },
+    });
+  }
+
   delete(id: string, organizationId: string) {
     return this.prisma.team.delete({ where: { id, organizationId } });
   }

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Role } from "@prisma/client";
 import { CurrentUser } from "../../shared/auth/current-user.decorator";
@@ -6,6 +6,7 @@ import { RequestUser } from "../../shared/auth/request-user.type";
 import { PageQueryDto } from "../../shared/pagination/page-query.dto";
 import { Roles } from "../../shared/rbac/roles.decorator";
 import { CreateTeamDto } from "./dto/create-team.dto";
+import { UpdateTeamDto } from "./dto/update-team.dto";
 import { TeamsService } from "./teams.service";
 
 @ApiTags("Teams")
@@ -30,6 +31,12 @@ export class TeamsController {
   @Roles(Role.SUPER_ADMIN, Role.DIRECTOR, Role.COACH)
   create(@CurrentUser() user: RequestUser, @Body() dto: CreateTeamDto) {
     return this.service.create(user, dto);
+  }
+
+  @Patch(":id")
+  @Roles(Role.SUPER_ADMIN, Role.DIRECTOR, Role.COACH)
+  update(@CurrentUser() user: RequestUser, @Param("id") id: string, @Body() dto: UpdateTeamDto) {
+    return this.service.update(user, id, dto);
   }
 
   @Delete(":id")

@@ -62,25 +62,20 @@ GET  /api/v1/organizations
 POST /api/v1/organizations
 GET  /api/v1/organizations/:id
 
-GET  /api/v1/teams
-POST /api/v1/teams
-GET  /api/v1/players
-POST /api/v1/players
-GET  /api/v1/coaches
-POST /api/v1/coaches
-GET  /api/v1/trainings
-POST /api/v1/trainings
-GET  /api/v1/matches
-POST /api/v1/matches
+GET    /api/v1/{teams,players,coaches,trainings,matches,expenses}
+POST   /api/v1/{teams,players,coaches,trainings,matches,expenses}
+GET    /api/v1/{teams,players,coaches,trainings,matches}/:id
+PATCH  /api/v1/{teams,players,coaches,trainings,matches,expenses}/:id
+DELETE /api/v1/{teams,players,coaches,trainings,matches,expenses}/:id
 GET  /api/v1/payments
 POST /api/v1/payments
 POST /api/v1/payments/reminders/run   (x-cron-secret, external scheduler)
-GET  /api/v1/expenses
-POST /api/v1/expenses
-GET  /api/v1/notifications
-POST /api/v1/notifications
-GET  /api/v1/documents
-POST /api/v1/documents
+GET    /api/v1/notifications
+POST   /api/v1/notifications
+DELETE /api/v1/notifications/:id
+GET    /api/v1/documents
+POST   /api/v1/documents
+DELETE /api/v1/documents/:id
 ```
 
 ## Frontend Session
@@ -146,7 +141,7 @@ Payment reminders run through `POST /payments/reminders/run`, authenticated with
 ## Production Hardening To Add Next
 
 - Email delivery webhooks (bounces, complaints) once the provider is live
-- Full update/delete controllers with audit logging
+- Audit logging for the update and delete endpoints
 - Row-level ownership filters for the remaining player/parent visible resources
 - File storage adapter for documents
 - E2E tests covering the full auth and tenant-isolation flows against a real database

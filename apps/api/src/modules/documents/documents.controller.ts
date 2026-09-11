@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Role } from "@prisma/client";
 import { CurrentUser } from "../../shared/auth/current-user.decorator";
@@ -23,5 +23,11 @@ export class DocumentsController {
   @Roles(Role.SUPER_ADMIN, Role.DIRECTOR, Role.PLAYER)
   create(@CurrentUser() user: RequestUser, @Body() dto: CreateDocumentDto) {
     return this.service.create(user, dto);
+  }
+
+  @Delete(":id")
+  @Roles(Role.SUPER_ADMIN, Role.DIRECTOR, Role.COACH, Role.PLAYER)
+  remove(@CurrentUser() user: RequestUser, @Param("id") id: string) {
+    return this.service.remove(user, id);
   }
 }

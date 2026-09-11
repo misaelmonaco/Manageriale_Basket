@@ -6,6 +6,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { RequestUser } from "../../shared/auth/request-user.type";
 import { TenantService } from "../../shared/tenant/tenant.service";
 import { CreateCoachDto } from "./dto/create-coach.dto";
+import { UpdateCoachDto } from "./dto/update-coach.dto";
 
 @Injectable()
 export class CoachesService {
@@ -20,6 +21,23 @@ export class CoachesService {
     return this.prisma.coach.findMany({
       where: { organizationId },
       include: { user: { select: { id: true, firstName: true, lastName: true, email: true } }, teams: true }
+    });
+  }
+
+  async findOne(user: RequestUser, id: string) {
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
+    return this.prisma.coach.findUniqueOrThrow({
+      where: { id, organizationId },
+      include: { user: { select: { id: true, firstName: true, lastName: true, email: true } }, teams: true },
+    });
+  }
+
+  async update(user: RequestUser, id: string, dto: UpdateCoachDto) {
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
+    return this.prisma.coach.update({
+      where: { id, organizationId },
+      data: dto,
+      include: { user: { select: { id: true, firstName: true, lastName: true, email: true } }, teams: true },
     });
   }
 

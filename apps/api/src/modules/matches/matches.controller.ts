@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Role } from "@prisma/client";
 import { CurrentUser } from "../../shared/auth/current-user.decorator";
@@ -6,6 +6,7 @@ import { RequestUser } from "../../shared/auth/request-user.type";
 import { PageQueryDto } from "../../shared/pagination/page-query.dto";
 import { Roles } from "../../shared/rbac/roles.decorator";
 import { CreateMatchDto } from "./dto/create-match.dto";
+import { UpdateMatchDto } from "./dto/update-match.dto";
 import { MatchesService } from "./matches.service";
 
 @ApiTags("Matches")
@@ -24,6 +25,18 @@ export class MatchesController {
   @Roles(Role.SUPER_ADMIN, Role.DIRECTOR, Role.COACH)
   create(@CurrentUser() user: RequestUser, @Body() dto: CreateMatchDto) {
     return this.service.create(user, dto);
+  }
+
+  @Get(":id")
+  @Roles(Role.SUPER_ADMIN, Role.DIRECTOR, Role.COACH, Role.PLAYER, Role.PARENT)
+  findOne(@CurrentUser() user: RequestUser, @Param("id") id: string) {
+    return this.service.findOne(user, id);
+  }
+
+  @Patch(":id")
+  @Roles(Role.SUPER_ADMIN, Role.DIRECTOR, Role.COACH)
+  update(@CurrentUser() user: RequestUser, @Param("id") id: string, @Body() dto: UpdateMatchDto) {
+    return this.service.update(user, id, dto);
   }
 
   @Delete(":id")

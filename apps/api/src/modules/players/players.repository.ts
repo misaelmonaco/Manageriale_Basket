@@ -38,6 +38,17 @@ export class PlayersRepository {
     return this.prisma.player.create({ data });
   }
 
+  update(id: string, organizationId: string, data: Prisma.PlayerUncheckedUpdateInput) {
+    return this.prisma.player.update({
+      where: { id, organizationId },
+      data,
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+        team: { select: { id: true, name: true, category: true, season: true } },
+      },
+    });
+  }
+
   delete(id: string, organizationId: string) {
     return this.prisma.player.delete({ where: { id, organizationId } });
   }

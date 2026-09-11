@@ -20,6 +20,11 @@ export class NotificationsService {
     return this.prisma.notification.create({ data: { ...dto, organizationId } });
   }
 
+  async remove(user: RequestUser, id: string) {
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
+    return this.prisma.notification.delete({ where: { id, organizationId } });
+  }
+
   private async assertUserInTenant(organizationId: string, userId: string) {
     const count = await this.prisma.user.count({ where: { id: userId, organizationId } });
     if (count !== 1) throw new ForbiddenException("User does not belong to this organization.");

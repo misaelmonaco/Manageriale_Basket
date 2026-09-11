@@ -3,6 +3,7 @@ import { RequestUser } from "../../shared/auth/request-user.type";
 import { PageQueryDto } from "../../shared/pagination/page-query.dto";
 import { TenantService } from "../../shared/tenant/tenant.service";
 import { CreateTeamDto } from "./dto/create-team.dto";
+import { UpdateTeamDto } from "./dto/update-team.dto";
 import { TeamsRepository } from "./teams.repository";
 
 @Injectable()
@@ -28,6 +29,11 @@ export class TeamsService {
     const { organizationSlug, ...teamDto } = dto;
     void organizationSlug;
     return this.repository.create({ ...teamDto, organizationId });
+  }
+
+  async update(user: RequestUser, id: string, dto: UpdateTeamDto) {
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
+    return this.repository.update(id, organizationId, dto);
   }
 
   async remove(user: RequestUser, id: string) {

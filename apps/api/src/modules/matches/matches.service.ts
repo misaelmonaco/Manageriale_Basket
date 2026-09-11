@@ -4,6 +4,7 @@ import { RequestUser } from "../../shared/auth/request-user.type";
 import { PageQueryDto } from "../../shared/pagination/page-query.dto";
 import { TenantService } from "../../shared/tenant/tenant.service";
 import { CreateMatchDto } from "./dto/create-match.dto";
+import { UpdateMatchDto } from "./dto/update-match.dto";
 
 @Injectable()
 export class MatchesService {
@@ -22,6 +23,17 @@ export class MatchesService {
     const organizationId = await this.tenant.resolveForUserOrSlug(user);
     await this.assertTeamInTenant(organizationId, dto.homeTeamId);
     return this.prisma.match.create({ data: { ...dto, organizationId } });
+  }
+
+  async findOne(user: RequestUser, id: string) {
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
+    return this.prisma.match.findUniqueOrThrow({ where: { id, organizationId }, include: { homeTeam: true } });
+  }
+
+  async update(user: RequestUser, id: string, dto: UpdateMatchDto) {
+    const organizationId = await this.tenant.resolveForUserOrSlug(user);
+    if (dto.homeTeamId) await this.assertTeamInTenant(organizationId, dto.homeTeamId);
+    return this.prisma.match.update({ where: { id, organizationId }, data: dto, include: { homeTeam: true } });
   }
 
   async remove(user: RequestUser, id: string) {
