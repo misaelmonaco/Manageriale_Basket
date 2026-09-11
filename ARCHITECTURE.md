@@ -125,6 +125,7 @@ Payment reminders run through `POST /payments/reminders/run`, authenticated with
 - `GET /api/v1/health` is a liveness probe; `GET /api/v1/health/ready` also pings the database and reports the active mail transport, answering 503 when Postgres is unreachable
 - `AllExceptionsFilter` is the single error exit point: it maps Prisma failures to HTTP codes (P2002 conflict, P2003 bad request, P2025 not found), logs 5xx with a stack, and never returns an internal message
 - `RequestLoggingInterceptor` logs one line per request (method, path, status, duration), skipping health probes
+- The first administrator is bootstrapped by `pnpm --filter @basket/api seed:super-admin`, which is idempotent: it skips once a `SUPER_ADMIN` exists and never overwrites a password unless `SUPER_ADMIN_RESET=true`, so it can stay in the deploy pipeline
 - Migrations are applied with `pnpm --filter @basket/api prisma:deploy` (`prisma migrate deploy`); `prisma:migrate` is the development-only command and must never run against production
 - CI (`.github/workflows/ci.yml`) generates the Prisma client, type-checks, runs the API test suite and builds both apps
 
@@ -134,7 +135,6 @@ Payment reminders run through `POST /payments/reminders/run`, authenticated with
 
 ## Production Hardening To Add Next
 
-- Seed script for first `SUPER_ADMIN`
 - Email delivery webhooks (bounces, complaints) once the provider is live
 - Full update/delete controllers with audit logging
 - Row-level ownership filters for the remaining player/parent visible resources
