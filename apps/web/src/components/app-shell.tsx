@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { apiFetch, clientAuth, logout } from "@/lib/api";
+import { accessToken, clearSession, readToken, refreshTokenValue } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { navForRole } from "@/lib/navigation";
 
@@ -84,8 +85,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const items = useMemo(() => navForRole(role ?? "DIRECTOR"), [role]);
 
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    const storedRole = localStorage.getItem("role") as Role | null;
+    const token = accessToken();
+    const storedRole = readToken("role") as Role | null;
 
     if (!token || !storedRole) {
       router.replace("/login");
@@ -93,9 +94,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     setRole(storedRole);
-    const firstName = localStorage.getItem("firstName");
-    const lastName = localStorage.getItem("lastName");
-    const email = localStorage.getItem("email");
+    const firstName = readToken("firstName");
+    const lastName = readToken("lastName");
+    const email = readToken("email");
     setUserLabel([firstName, lastName].filter(Boolean).join(" ") || email || storedRole.replace("_", " "));
   }, [router]);
 
@@ -117,8 +118,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (!role) return;
       const organizationId =
         role === "SUPER_ADMIN"
-          ? localStorage.getItem("selectedOrganizationId") || localStorage.getItem("organizationId")
-          : localStorage.getItem("organizationId");
+          ? readToken("selectedOrganizationId") || readToken("organizationId")
+          : readToken("organizationId");
       if (!organizationId) return;
 
       try {
@@ -140,8 +141,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [role]);
 
   async function handleLogout() {
-    const token = localStorage.getItem("accessToken");
-    const refreshToken = localStorage.getItem("refreshToken");
+    const token = accessToken();
+    const refreshToken = refreshTokenValue();
     setLoggingOut(true);
 
     try {
@@ -149,16 +150,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } catch {
       // Local sign-out should still complete if the server token was already invalid.
     } finally {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("role");
-      localStorage.removeItem("organizationId");
-      localStorage.removeItem("selectedOrganizationId");
-      localStorage.removeItem("selectedOrganizationSlug");
-      localStorage.removeItem("selectedOrganizationName");
-      localStorage.removeItem("firstName");
-      localStorage.removeItem("lastName");
-      localStorage.removeItem("email");
+      clearSession();
       router.replace("/login");
       router.refresh();
     }

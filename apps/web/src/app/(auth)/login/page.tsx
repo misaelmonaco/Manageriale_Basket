@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { login, resendVerification } from "@/lib/api";
+import { storeSession } from "@/lib/session";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,19 +18,6 @@ export default function LoginPage() {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-
-  function storeSession(session: Awaited<ReturnType<typeof login>>) {
-    localStorage.setItem("accessToken", session.accessToken);
-    localStorage.setItem("refreshToken", session.refreshToken);
-    localStorage.setItem("role", session.user.role);
-    localStorage.setItem("organizationId", session.user.organizationId ?? "");
-    localStorage.removeItem("selectedOrganizationId");
-    localStorage.removeItem("selectedOrganizationSlug");
-    localStorage.removeItem("selectedOrganizationName");
-    localStorage.setItem("firstName", session.user.firstName);
-    localStorage.setItem("lastName", session.user.lastName);
-    localStorage.setItem("email", session.user.email);
-  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

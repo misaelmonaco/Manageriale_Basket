@@ -1,52 +1,108 @@
 import { AuthSession, RegisterResponse } from "@basket/contracts";
+import {
+  accessToken,
+  clearSession,
+  readToken,
+  redirectToLogin,
+  refreshTokenValue,
+  storeTokens,
+} from "./session";
 
 const baseUrl =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
-export async function apiFetch<T>(
-  path: string,
-  init: RequestInit & {
-    token?: string;
-    organizationId?: string;
-    organizationSlug?: string;
-  } = {},
-): Promise<T> {
+type ApiInit = RequestInit & {
+  token?: string;
+  organizationId?: string;
+  organizationSlug?: string;
+};
+
+/** Routes that must never trigger a refresh, or the retry would recurse. */
+const NO_REFRESH_PATHS = ["/auth/login", "/auth/refresh", "/auth/logout", "/auth/register"];
+
+/**
+ * Shared across concurrent callers: a dashboard page firing five requests at
+ * once must rotate the refresh token once, not five times. The server revokes
+ * the old token on use, so parallel refreshes would invalidate each other.
+ */
+let refreshInFlight: Promise<string | null> | null = null;
+
+function buildRequest(path: string, init: ApiInit) {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
   if (init.token) headers.set("Authorization", `Bearer ${init.token}`);
-  if (init.organizationId)
-    headers.set("x-organization-id", init.organizationId);
-  if (init.organizationSlug)
-    headers.set("x-organization-slug", init.organizationSlug);
+  if (init.organizationId) headers.set("x-organization-id", init.organizationId);
+  if (init.organizationSlug) headers.set("x-organization-slug", init.organizationSlug);
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers,
+  return fetch(`${baseUrl}${path}`, { ...init, headers, cache: "no-store" });
+}
+
+async function failureMessage(response: Response) {
+  const errorBody = await response.text();
+  try {
+    const parsed = JSON.parse(errorBody) as { message?: string | string[] };
+    const message = Array.isArray(parsed.message) ? parsed.message.join(" ") : parsed.message;
+    return message || errorBody || "Request failed";
+  } catch {
+    return errorBody || "Request failed";
+  }
+}
+
+/** Rotates the token pair once, returning the new access token or null. */
+async function refreshSession(): Promise<string | null> {
+  const refreshToken = refreshTokenValue();
+  if (!refreshToken) return null;
+
+  const response = await fetch(`${baseUrl}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
     cache: "no-store",
   });
-  if (!response.ok) {
-    const errorBody = await response.text();
-    let parsedMessage: string | undefined;
-    try {
-      const parsed = JSON.parse(errorBody) as { message?: string | string[] };
-      parsedMessage = Array.isArray(parsed.message)
-        ? parsed.message.join(" ")
-        : parsed.message;
-    } catch {
-      parsedMessage = undefined;
+
+  if (!response.ok) return null;
+
+  const session = (await response.json()) as AuthSession;
+  storeTokens(session.accessToken, session.refreshToken);
+  return session.accessToken;
+}
+
+function refreshOnce() {
+  refreshInFlight ??= refreshSession()
+    .catch(() => null)
+    .finally(() => {
+      refreshInFlight = null;
+    });
+  return refreshInFlight;
+}
+
+export async function apiFetch<T>(path: string, init: ApiInit = {}): Promise<T> {
+  let response = await buildRequest(path, init);
+
+  // An expired access token is the common case after 15 minutes of work:
+  // rotate it and replay the request instead of dropping the user at /login.
+  if (response.status === 401 && init.token && !NO_REFRESH_PATHS.some((p) => path.startsWith(p))) {
+    const renewed = await refreshOnce();
+
+    if (renewed) {
+      response = await buildRequest(path, { ...init, token: renewed });
+    } else {
+      clearSession();
+      redirectToLogin();
+      throw new Error("Session expired");
     }
-    throw new Error(parsedMessage || errorBody || "Request failed");
   }
+
+  if (!response.ok) throw new Error(await failureMessage(response));
   return response.json() as Promise<T>;
 }
 
 export function clientAuth() {
   if (typeof window === "undefined") return {};
   return {
-    token: localStorage.getItem("accessToken") ?? undefined,
-    organizationId: localStorage.getItem("organizationId") || undefined,
-    organizationSlug:
-      localStorage.getItem("selectedOrganizationSlug") || undefined,
+    token: accessToken() ?? undefined,
+    organizationId: readToken("organizationId") || undefined,
+    organizationSlug: readToken("selectedOrganizationSlug") || undefined,
   };
 }
 
@@ -93,10 +149,7 @@ export function updateUserPassword(userId: string, password: string) {
     { success: boolean }
   >(`/auth/users/${userId}/password`, {
     password,
-    organizationSlug:
-      typeof window === "undefined"
-        ? undefined
-        : localStorage.getItem("selectedOrganizationSlug") || undefined,
+    organizationSlug: readToken("selectedOrganizationSlug") || undefined,
   });
 }
 

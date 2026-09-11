@@ -83,6 +83,12 @@ GET  /api/v1/documents
 POST /api/v1/documents
 ```
 
+## Frontend Session
+
+`src/lib/session.ts` owns the stored session: every read and write is guarded, because the accessors run during SSR and throw outright in a browser with site data blocked.
+
+`apiFetch` rotates the token pair on a 401 and replays the original request, so a 15-minute access token does not interrupt work in progress. The rotation is shared across concurrent callers: the API revokes a refresh token when it is used, so parallel refreshes would invalidate each other. Auth routes are excluded to keep the retry from recursing. When the refresh itself fails the session is cleared and the user is sent to `/login`.
+
 ## Frontend Routes
 
 ```text
